@@ -4,6 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { PlaceholderPage } from "../features/placeholder/PlaceholderPage";
 import { SymbolDetailPage } from "../features/symbol-detail/SymbolDetailPage";
+import { WatchlistPage } from "../features/watchlist/WatchlistPage";
 
 export const router = createBrowserRouter([
   {
@@ -11,7 +12,7 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <DashboardPage /> },
       { path: "/symbols/:symbol", element: <SymbolDetailPage /> },
-      { path: "/watchlist", element: <PlaceholderPage title="Watchlist" /> },
+      { path: "/watchlist", element: <WatchlistPage /> },
       { path: "/jobs", element: <PlaceholderPage title="Jobs" /> },
       { path: "/settings", element: <PlaceholderPage title="Settings" /> }
     ]

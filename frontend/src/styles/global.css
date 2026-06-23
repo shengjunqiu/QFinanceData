@@ -187,6 +187,35 @@ a:focus-visible {
   padding: 0 12px;
 }
 
+.primary-action {
+  background: var(--accent);
+  border-color: var(--accent);
+  border-radius: 6px;
+  color: #ffffff;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.primary-action:hover {
+  background: #155b78;
+  border-color: #155b78;
+}
+
+.text-action {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 0;
+}
+
+.danger-action {
+  color: var(--negative);
+}
+
 .page {
   padding: 24px;
 }
@@ -507,6 +536,112 @@ h2 {
   padding: 10px;
 }
 
+.watchlist-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(280px, 0.5fr) minmax(0, 1fr);
+  margin-bottom: 12px;
+}
+
+.add-symbol-form {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.add-symbol-form input {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.add-symbol-form button,
+.group-tab {
+  border-radius: 6px;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 0 12px;
+}
+
+.group-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.group-tab-active,
+.group-tab-active:hover {
+  background: #172033;
+  border-color: #172033;
+  color: #ffffff;
+}
+
+.inline-message {
+  background: var(--accent-soft);
+  border: 1px solid #b8dce6;
+  border-radius: 6px;
+  color: #0d566f;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+
+.watchlist-management-panel {
+  min-width: 0;
+}
+
+.watchlist-management-table {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.watchlist-management-row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 32px minmax(180px, 1.4fr) minmax(86px, 0.5fr) minmax(80px, 0.4fr) minmax(116px, 0.6fr) minmax(92px, 0.5fr) minmax(72px, 0.4fr);
+  min-height: 56px;
+  padding: 8px 10px;
+}
+
+.watchlist-management-header {
+  border-color: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 34px;
+  text-transform: uppercase;
+}
+
+.watchlist-management-row input[type="checkbox"] {
+  height: 16px;
+  width: 16px;
+}
+
+.symbol-link {
+  color: var(--text);
+  display: grid;
+  gap: 3px;
+  text-decoration: none;
+}
+
+.symbol-link small {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .symbol-detail-page {
   display: grid;
   gap: 16px;
@@ -706,7 +841,8 @@ h2 {
   .market-strip,
   .mover-columns,
   .symbol-detail-grid,
-  .metric-grid {
+  .metric-grid,
+  .watchlist-toolbar {
     grid-template-columns: 1fr;
   }
 
@@ -765,5 +901,20 @@ h2 {
   .symbol-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .group-tabs {
+    justify-content: flex-start;
+  }
+
+  .watchlist-management-row {
+    grid-template-columns: 28px minmax(160px, 1fr) minmax(92px, auto);
+  }
+
+  .watchlist-management-row > span:nth-child(3),
+  .watchlist-management-row > span:nth-child(4),
+  .watchlist-management-row > span:nth-child(5),
+  .watchlist-management-header {
+    display: none;
   }
 }
