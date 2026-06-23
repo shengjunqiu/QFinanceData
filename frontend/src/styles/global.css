@@ -657,6 +657,110 @@ h2 {
   padding: 0 12px;
 }
 
+.settings-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.setting-field {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, auto);
+  min-height: 86px;
+  padding: 14px;
+}
+
+.setting-field strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.setting-field p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.settings-segmented-control {
+  display: inline-grid;
+  gap: 4px;
+  grid-auto-flow: column;
+  justify-self: end;
+}
+
+.settings-segmented-control button,
+.number-setting button {
+  border-radius: 6px;
+  font-weight: 700;
+  min-height: 38px;
+  min-width: 48px;
+  padding: 0 10px;
+}
+
+.settings-segmented-control .settings-segment-active,
+.settings-segmented-control .settings-segment-active:hover {
+  background: #172033;
+  border-color: #172033;
+  color: #ffffff;
+}
+
+.settings-input {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  min-height: 38px;
+  min-width: 140px;
+  padding: 0 10px;
+}
+
+.number-setting {
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: auto 82px auto;
+  justify-self: end;
+}
+
+.number-setting input {
+  text-align: center;
+}
+
+.settings-preview-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.preview-item {
+  background: #f8fbfd;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-height: 72px;
+  padding: 12px;
+}
+
+.preview-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .jobs-page-grid {
   display: grid;
   gap: 16px;
@@ -1028,7 +1132,10 @@ h2 {
   .metric-grid,
   .watchlist-toolbar,
   .jobs-page-grid,
-  .job-detail-summary {
+  .job-detail-summary,
+  .settings-grid,
+  .settings-preview-grid,
+  .setting-field {
     grid-template-columns: 1fr;
   }
 
@@ -1115,5 +1222,23 @@ h2 {
 
   .job-history-header {
     display: none;
+  }
+
+  .settings-actions {
+    width: 100%;
+  }
+
+  .settings-actions button {
+    flex: 1;
+  }
+
+  .settings-segmented-control,
+  .number-setting {
+    justify-self: stretch;
+  }
+
+  .settings-segmented-control {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
