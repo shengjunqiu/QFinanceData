@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -27,3 +28,32 @@ class PriceBar(BaseModel):
     @classmethod
     def strip_text(cls, value: object) -> str:
         return str(value).strip()
+
+
+class PriceBarRead(BaseModel):
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    adj_close: float
+    volume: int
+
+
+class PriceSeriesResponse(BaseModel):
+    symbol: str
+    interval: str
+    range: str
+    status: Literal["ok", "missing"]
+    bars: list[PriceBarRead]
+
+
+class LatestPriceResponse(BaseModel):
+    symbol: str
+    interval: str
+    status: Literal["ok", "missing"]
+    latest_data_at: datetime | None = None
+    latest_price: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    volume: int | None = None

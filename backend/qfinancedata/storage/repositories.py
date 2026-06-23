@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +133,182 @@ class SymbolRepository:
         return self.get_symbol(symbol, include_disabled=True)
 
 
+class JobRepository:
+    def __init__(self, sqlite_path: Path) -> None:
+        self.sqlite_path = sqlite_path
+
+    def create_job(
+        self,
+        job_type: str,
+        *,
+        params: dict[str, Any],
+        symbols: list[str],
+    ) -> dict[str, Any]:
+        job_id = uuid.uuid4().hex
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO fetch_jobs (
+                    id,
+                    job_type,
+                    status,
+                    params_json,
+                    progress_total,
+                    progress_done
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    job_type,
+                    "queued",
+                    json.dumps(params, sort_keys=True),
+                    len(symbols),
+                    0,
+                ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO fetch_job_items (id, job_id, symbol, status)
+                VALUES (?, ?, ?, ?)
+                """,
+                [
+                    (uuid.uuid4().hex, job_id, symbol, "queued")
+                    for symbol in symbols
+                ],
+            )
+            connection.commit()
+
+        record = self.get_job(job_id)
+        if record is None:
+            raise RuntimeError(f"Created job {job_id} could not be read.")
+        return record
+
+    def list_jobs(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        with sqlite_connection(self.sqlite_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM fetch_jobs
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [self._job_with_items(row) for row in rows]
+
+    def get_job(self, job_id: str) -> dict[str, Any] | None:
+        with sqlite_connection(self.sqlite_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM fetch_jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+
+        return self._job_with_items(row) if row else None
+
+    def mark_job_running(self, job_id: str) -> None:
+        now = utc_now_iso()
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                UPDATE fetch_jobs
+                SET status = ?, started_at = ?
+                WHERE id = ?
+                """,
+                ("running", now, job_id),
+            )
+            connection.commit()
+
+    def mark_job_finished(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        error_summary: str | None = None,
+    ) -> None:
+        now = utc_now_iso()
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                UPDATE fetch_jobs
+                SET status = ?, error_summary = ?, finished_at = ?
+                WHERE id = ?
+                """,
+                (status, error_summary, now, job_id),
+            )
+            connection.commit()
+
+    def mark_item_running(self, job_id: str, symbol: str) -> None:
+        now = utc_now_iso()
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                UPDATE fetch_job_items
+                SET status = ?, started_at = ?
+                WHERE job_id = ? AND symbol = ?
+                """,
+                ("running", now, job_id, symbol),
+            )
+            connection.commit()
+
+    def mark_item_finished(
+        self,
+        job_id: str,
+        symbol: str,
+        *,
+        status: str,
+        error_type: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        now = utc_now_iso()
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                UPDATE fetch_job_items
+                SET
+                    status = ?,
+                    error_type = ?,
+                    error_message = ?,
+                    finished_at = ?
+                WHERE job_id = ? AND symbol = ?
+                """,
+                (status, error_type, error_message, now, job_id, symbol),
+            )
+            connection.execute(
+                """
+                UPDATE fetch_jobs
+                SET progress_done = (
+                    SELECT COUNT(*)
+                    FROM fetch_job_items
+                    WHERE job_id = ?
+                      AND status IN ('success', 'failed', 'skipped')
+                )
+                WHERE id = ?
+                """,
+                (job_id, job_id),
+            )
+            connection.commit()
+
+    def _job_with_items(self, row: sqlite3.Row) -> dict[str, Any]:
+        record = dict(row)
+        record["params"] = json.loads(record.pop("params_json") or "{}")
+        record["items"] = self._list_job_items(record["id"])
+        return record
+
+    def _list_job_items(self, job_id: str) -> list[dict[str, Any]]:
+        with sqlite_connection(self.sqlite_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM fetch_job_items
+                WHERE job_id = ?
+                ORDER BY symbol ASC
+                """,
+                (job_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+
 def _symbol_select_sql() -> str:
     return """
         SELECT
@@ -156,3 +335,10 @@ def _symbol_from_row(row: sqlite3.Row) -> dict[str, Any]:
     record = dict(row)
     record["enabled"] = bool(record["enabled"])
     return record
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace(
+        "+00:00",
+        "Z",
+    )
