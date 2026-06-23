@@ -3,14 +3,7 @@ import { Link } from "react-router-dom";
 import { mockDashboardSummary, mockPriceBarsBySymbol } from "../../api/mockData";
 import type { DataStatus, FetchJob, SymbolQuote } from "../../api/types";
 import { ReturnChart } from "../../charts/ReturnChart";
-
-const statusLabels: Record<DataStatus, string> = {
-  fresh: "Fresh",
-  stale: "Stale",
-  missing: "Missing",
-  failed: "Failed",
-  partial: "Partial"
-};
+import { StatusBadge } from "../../components/StatusBadge";
 
 export function DashboardPage() {
   const dashboard = mockDashboardSummary;
@@ -179,10 +172,6 @@ function ChangeValue({ value }: { value: number | null }) {
   const prefix = value > 0 ? "+" : "";
 
   return <span className={`change-value ${tone}`}>{prefix}{value.toFixed(2)}%</span>;
-}
-
-function StatusBadge({ status }: { status: DataStatus }) {
-  return <span className={`status-badge status-${status}`}>{statusLabels[status]}</span>;
 }
 
 function EmptyState({ compact = false, description, title }: { compact?: boolean; description: string; title: string }) {

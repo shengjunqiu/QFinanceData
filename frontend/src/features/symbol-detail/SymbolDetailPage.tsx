@@ -10,14 +10,7 @@ import {
 import type { CorporateAction, DataStatus, DataStatusRecord, FundamentalSnapshot, SymbolQuote } from "../../api/types";
 import { PriceChart } from "../../charts/PriceChart";
 import { VolumeChart } from "../../charts/VolumeChart";
-
-const statusLabels: Record<DataStatus, string> = {
-  fresh: "Fresh",
-  stale: "Stale",
-  missing: "Missing",
-  failed: "Failed",
-  partial: "Partial"
-};
+import { StatusBadge } from "../../components/StatusBadge";
 
 export function SymbolDetailPage() {
   const { symbol: symbolParam } = useParams();
@@ -205,10 +198,6 @@ function ChangeValue({ value }: { value: number | null }) {
   const prefix = value > 0 ? "+" : "";
 
   return <span className={`change-value ${tone}`}>{prefix}{value.toFixed(2)}%</span>;
-}
-
-function StatusBadge({ status }: { status: DataStatus }) {
-  return <span className={`status-badge status-${status}`}>{statusLabels[status]}</span>;
 }
 
 function EmptyState({ compact = false, description, title }: { compact?: boolean; description: string; title: string }) {

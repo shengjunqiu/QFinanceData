@@ -2,15 +2,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { mockWatchlist } from "../../api/mockData";
-import type { DataStatus, SymbolQuote } from "../../api/types";
-
-const statusLabels: Record<DataStatus, string> = {
-  fresh: "Fresh",
-  stale: "Stale",
-  missing: "Missing",
-  failed: "Failed",
-  partial: "Partial"
-};
+import type { SymbolQuote } from "../../api/types";
+import { StatusBadge } from "../../components/StatusBadge";
 
 export function WatchlistPage() {
   const [symbols, setSymbols] = useState<SymbolQuote[]>(mockWatchlist);
@@ -216,10 +209,6 @@ export function WatchlistPage() {
       </section>
     </section>
   );
-}
-
-function StatusBadge({ status }: { status: DataStatus }) {
-  return <span className={`status-badge status-${status}`}>{statusLabels[status]}</span>;
 }
 
 function formatAssetType(value: SymbolQuote["assetType"]) {
