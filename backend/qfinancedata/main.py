@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from qfinancedata.api.symbols import router as symbols_router
 from qfinancedata import __version__
 from qfinancedata.config import Settings, get_settings
 from qfinancedata.logging import configure_logging
@@ -29,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         lifespan=lifespan,
     )
+    app.state.settings = app_settings
 
     @app.get("/health", tags=["system"])
     def health_check() -> dict[str, str]:
@@ -38,6 +40,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "version": __version__,
             "environment": app_settings.environment,
         }
+
+    app.include_router(symbols_router)
 
     return app
 

@@ -359,7 +359,7 @@ data/parquet/
 - 重复启动不会破坏已有表。
 - 有基础 repository 测试。
 
-### T2.4 实现 Symbols API
+### T2.4 初始化 SQLite 存储
 
 目标：支持 Watchlist 的增删改查。
 
