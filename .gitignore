@@ -6,6 +6,7 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+*.egg-info/
 
 # Virtual environments
 .venv/
@@ -32,4 +33,3 @@ data/parquet/
 
 # Local system files
 .DS_Store
-
