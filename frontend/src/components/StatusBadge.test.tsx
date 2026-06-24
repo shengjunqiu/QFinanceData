@@ -15,4 +15,11 @@ describe("StatusBadge", () => {
       expect(markup).toContain(dataStatusLabels[status]);
     }
   });
+
+  it("supports a custom display label", () => {
+    const markup = renderToStaticMarkup(<StatusBadge label="新鲜" status="fresh" />);
+
+    expect(markup).toContain("status-fresh");
+    expect(markup).toContain("新鲜");
+  });
 });

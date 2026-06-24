@@ -9,9 +9,10 @@ export const dataStatusLabels: Record<DataStatus, string> = {
 };
 
 type StatusBadgeProps = {
+  label?: string;
   status: DataStatus;
 };
 
-export function StatusBadge({ status }: StatusBadgeProps) {
-  return <span className={`status-badge status-${status}`}>{dataStatusLabels[status]}</span>;
+export function StatusBadge({ label, status }: StatusBadgeProps) {
+  return <span className={`status-badge status-${status}`}>{label ?? dataStatusLabels[status]}</span>;
 }

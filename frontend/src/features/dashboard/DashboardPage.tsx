@@ -7,8 +7,18 @@ import { getPrices, pricesQueryKeys } from "../../api/prices";
 import type { DataStatus, DataType, FetchJob, FreshnessByType, SymbolQuote } from "../../api/types";
 import { ReturnChart } from "../../charts/ReturnChart";
 import { StatusBadge } from "../../components/StatusBadge";
+import {
+  formatDashboardDataType,
+  formatDashboardDateTime,
+  formatDashboardSymbolCount,
+  formatDashboardUpdatedAt,
+  type DashboardCopy,
+  type DashboardLocale,
+  useDashboardLocale
+} from "../../i18n/dashboard";
 
 export function DashboardPage() {
+  const { copy, locale, setLocale } = useDashboardLocale();
   const overviewQuery = useMarketOverviewQuery();
   const overview = overviewQuery.data;
   const trendSymbols = overview?.watchlist.slice(0, 5).map((quote) => quote.symbol) ?? [];
@@ -46,7 +56,10 @@ export function DashboardPage() {
   if (error) {
     return (
       <section className="page">
-        <EmptyState title="Dashboard unavailable" description={formatErrorMessage(error)} />
+        <div className="dashboard-utility-row">
+          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
+        </div>
+        <EmptyState title={copy.overviewUnavailable} description={formatErrorMessage(error)} />
       </section>
     );
   }
@@ -54,7 +67,10 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <section className="page">
-        <EmptyState title="Loading dashboard" description="Fetching symbols, prices, data status and recent jobs." />
+        <div className="dashboard-utility-row">
+          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
+        </div>
+        <EmptyState title={copy.loadingDashboard} description={copy.fetchingDashboard} />
       </section>
     );
   }
@@ -63,17 +79,20 @@ export function DashboardPage() {
     <section className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Market Overview</p>
-          <h1>Dashboard</h1>
+          <p className="eyebrow">{copy.marketOverview}</p>
+          <h1>{copy.dashboard}</h1>
         </div>
-        <span className="status-pill">{dashboard.lastUpdateAt ? `Updated ${formatDateTime(dashboard.lastUpdateAt)}` : "Not updated yet"}</span>
+        <div className="dashboard-header-actions">
+          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
+          <span className="status-pill">{dashboard.lastUpdateAt ? formatDashboardUpdatedAt(dashboard.lastUpdateAt, locale) : copy.notUpdatedYet}</span>
+        </div>
       </div>
 
       {!hasWatchlist ? (
-        <EmptyState title="No symbols yet" description="Add a ticker in Watchlist to start building the dashboard." />
+        <EmptyState title={copy.noSymbolsTitle} description={copy.noSymbolsDescription} />
       ) : (
         <>
-          <section className="market-strip" aria-label="Market summary">
+          <section className="market-strip" aria-label={copy.marketSummaryLabel}>
             {dashboard.marketIndices.map((index) => (
               <MarketTile key={index.symbol} quote={index} />
             ))}
@@ -82,15 +101,15 @@ export function DashboardPage() {
           <div className="dashboard-grid">
             <section className="panel watchlist-panel">
               <div className="panel-heading">
-                <h2>Watchlist</h2>
-                <Link to="/watchlist">Manage</Link>
+                <h2>{copy.watchlist}</h2>
+                <Link to="/watchlist">{copy.manage}</Link>
               </div>
-              <div className="watchlist-table" role="table" aria-label="Watchlist overview">
+              <div className="watchlist-table" role="table" aria-label={copy.watchlistOverviewLabel}>
                 <div className="watchlist-row watchlist-row-header" role="row">
-                  <span>Symbol</span>
-                  <span>Last</span>
-                  <span>Change</span>
-                  <span>Status</span>
+                  <span>{copy.symbol}</span>
+                  <span>{copy.last}</span>
+                  <span>{copy.change}</span>
+                  <span>{copy.status}</span>
                 </div>
                 {dashboard.watchlist.slice(0, 8).map((quote) => (
                   <Link className="watchlist-row watchlist-row-link" key={quote.symbol} role="row" to={`/symbols/${quote.symbol}`}>
@@ -100,7 +119,7 @@ export function DashboardPage() {
                     </span>
                     <span>{formatCurrency(quote.latestPrice, quote.currency)}</span>
                     <ChangeValue value={quote.changePct} />
-                    <StatusBadge status={quote.status} />
+                    <StatusBadge label={copy.statusLabels[quote.status]} status={quote.status} />
                   </Link>
                 ))}
               </div>
@@ -108,35 +127,35 @@ export function DashboardPage() {
 
             <section className="panel panel-wide">
               <div className="panel-heading">
-                <h2>Watchlist Trend</h2>
-                <span>Equal weight return</span>
+                <h2>{copy.watchlistTrend}</h2>
+                <span>{copy.equalWeightReturn}</span>
               </div>
               {hasTrendData ? (
                 <ReturnChart series={dashboard.trendSeries} />
               ) : (
-                <EmptyState title="No trend data" description="Run a price fetch job to populate watchlist history." compact />
+                <EmptyState title={copy.noTrendDataTitle} description={copy.noTrendDataDescription} compact />
               )}
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h2>Top Movers</h2>
+                <h2>{copy.topMovers}</h2>
               </div>
               <div className="mover-columns">
-                <MoverList title="Gainers" quotes={dashboard.topGainers} />
-                <MoverList title="Losers" quotes={dashboard.topLosers} />
+                <MoverList emptyDescription={copy.noMovers} title={copy.gainers} quotes={dashboard.topGainers} />
+                <MoverList emptyDescription={copy.noMovers} title={copy.losers} quotes={dashboard.topLosers} />
               </div>
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h2>Data Freshness</h2>
-                <Link to="/jobs">Review</Link>
+                <h2>{copy.dataFreshness}</h2>
+                <Link to="/jobs">{copy.review}</Link>
               </div>
               <div className="freshness-grid">
                 {Object.entries(dashboard.freshness).map(([status, count]) => (
                   <Link className="freshness-cell" key={status} to="/jobs">
-                    <StatusBadge status={status as DataStatus} />
+                    <StatusBadge label={copy.statusLabels[status as DataStatus]} status={status as DataStatus} />
                     <strong>{count}</strong>
                   </Link>
                 ))}
@@ -144,11 +163,11 @@ export function DashboardPage() {
               <div className="freshness-type-list" aria-label="Data freshness by type">
                 {Object.entries(dashboard.freshnessByType).map(([dataType, counts]) => (
                   <div className="freshness-type-row" key={dataType}>
-                    <span>{formatDataType(dataType as DataType)}</span>
+                    <span>{formatDashboardDataType(dataType as DataType, copy)}</span>
                     <div className="freshness-status-counts">
                       {(["failed", "partial", "stale", "missing", "fresh"] as DataStatus[]).map((status) => (
                         <small key={`${dataType}-${status}`}>
-                          {status}: {counts[status]}
+                          {copy.statusLabels[status]}: {counts[status]}
                         </small>
                       ))}
                     </div>
@@ -159,15 +178,15 @@ export function DashboardPage() {
 
             <section className="panel panel-full">
               <div className="panel-heading">
-                <h2>Recent Fetch Jobs</h2>
-                <Link to="/jobs">Open Jobs</Link>
+                <h2>{copy.recentFetchJobs}</h2>
+                <Link to="/jobs">{copy.openJobs}</Link>
               </div>
               {dashboard.recentJobs.length === 0 ? (
-                <EmptyState title="No fetch jobs yet" description="Start a job from the Jobs page to update prices." compact />
+                <EmptyState title={copy.noFetchJobsTitle} description={copy.noFetchJobsDescription} compact />
               ) : (
                 <div className="jobs-list">
                   {dashboard.recentJobs.map((job) => (
-                    <RecentJobRow job={job} key={job.id} />
+                    <RecentJobRow copy={copy} job={job} key={job.id} locale={locale} />
                   ))}
                 </div>
               )}
@@ -176,6 +195,37 @@ export function DashboardPage() {
         </>
       )}
     </section>
+  );
+}
+
+function DashboardLanguageToggle({
+  copy,
+  locale,
+  onChange
+}: {
+  copy: DashboardCopy;
+  locale: DashboardLocale;
+  onChange: (locale: DashboardLocale) => void;
+}) {
+  return (
+    <div className="language-toggle" aria-label={copy.language}>
+      <button
+        aria-pressed={locale === "en"}
+        className={locale === "en" ? "language-toggle-button language-toggle-button-active" : "language-toggle-button"}
+        onClick={() => onChange("en")}
+        type="button"
+      >
+        EN
+      </button>
+      <button
+        aria-pressed={locale === "zh"}
+        className={locale === "zh" ? "language-toggle-button language-toggle-button-active" : "language-toggle-button"}
+        onClick={() => onChange("zh")}
+        type="button"
+      >
+        中文
+      </button>
+    </div>
   );
 }
 
@@ -192,9 +242,9 @@ function MarketTile({ quote }: { quote: SymbolQuote }) {
   );
 }
 
-function MoverList({ quotes, title }: { quotes: SymbolQuote[]; title: string }) {
+function MoverList({ emptyDescription, quotes, title }: { emptyDescription: string; quotes: SymbolQuote[]; title: string }) {
   if (quotes.length === 0) {
-    return <EmptyState title={title} description="No movers to show." compact />;
+    return <EmptyState title={title} description={emptyDescription} compact />;
   }
 
   return (
@@ -210,18 +260,27 @@ function MoverList({ quotes, title }: { quotes: SymbolQuote[]; title: string }) 
   );
 }
 
-function RecentJobRow({ job }: { job: FetchJob }) {
+function RecentJobRow({
+  copy,
+  job,
+  locale
+}: {
+  copy: DashboardCopy;
+  job: FetchJob;
+  locale: DashboardLocale;
+}) {
   const progress = job.progressTotal > 0 ? Math.round((job.progressDone / job.progressTotal) * 100) : 0;
+  const displayStatus = getJobDisplayStatus(job);
 
   return (
     <Link className="job-row" to={`/jobs?job=${job.id}`}>
       <span>
-        <strong>{job.type}</strong>
-        <small>{formatDateTime(job.createdAt)}</small>
+        <strong>{copy.jobTypeLabels[job.type]}</strong>
+        <small>{formatDashboardDateTime(job.createdAt, locale)}</small>
       </span>
-      <span>{job.symbols.length} symbols</span>
-      <StatusBadge status={getJobDisplayStatus(job)} />
-      <span className="progress-meter" aria-label={`${progress}% complete`}>
+      <span>{formatDashboardSymbolCount(job.symbols.length, locale)}</span>
+      <StatusBadge label={copy.statusLabels[displayStatus]} status={displayStatus} />
+      <span className="progress-meter" aria-label={locale === "zh" ? `完成 ${progress}%` : `${progress}% complete`}>
         <span style={{ width: `${progress}%` }} />
       </span>
     </Link>
@@ -280,16 +339,6 @@ function emptyFreshnessByType(): FreshnessByType {
   };
 }
 
-function formatDataType(value: DataType) {
-  const labels: Record<DataType, string> = {
-    prices: "Prices",
-    metadata: "Metadata",
-    fundamentals: "Fundamentals",
-    actions: "Actions"
-  };
-  return labels[value];
-}
-
 function formatCurrency(value: number | null, currency: string) {
   if (value === null) {
     return "-";
@@ -306,15 +355,6 @@ function formatCurrency(value: number | null, currency: string) {
     maximumFractionDigits: value > 1000 ? 0 : 2,
     style: "currency"
   }).format(value);
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short"
-  }).format(new Date(value));
 }
 
 function formatErrorMessage(error: unknown) {

@@ -238,8 +238,50 @@ a:focus-visible {
 .page-header {
   align-items: center;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.dashboard-header-actions,
+.dashboard-utility-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.dashboard-utility-row {
+  margin-bottom: 16px;
+}
+
+.language-toggle {
+  align-items: center;
+  background: #eef3f8;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: inline-grid;
+  gap: 3px;
+  grid-template-columns: repeat(2, minmax(54px, 1fr));
+  padding: 3px;
+}
+
+.language-toggle-button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #45556f;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.language-toggle-button-active,
+.language-toggle-button-active:hover {
+  background: #172033;
+  color: #ffffff;
 }
 
 .eyebrow {
@@ -1258,6 +1300,21 @@ h2 {
   .topbar-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .page-header,
+  .dashboard-header-actions,
+  .dashboard-utility-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-header-actions {
+    justify-content: flex-start;
+  }
+
+  .language-toggle {
+    width: 100%;
   }
 
   .range-control {
