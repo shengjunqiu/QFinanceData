@@ -6,7 +6,7 @@ import { pricesQueryKeys } from "./prices";
 import { symbolsQueryKeys } from "./symbols";
 import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus, FetchJobType, PriceFetchRequest } from "./types";
 
-type BackendFetchJobItem = {
+export type BackendFetchJobItem = {
   id: string;
   job_id: string;
   symbol: string;
@@ -17,7 +17,7 @@ type BackendFetchJobItem = {
   finished_at: string | null;
 };
 
-type BackendFetchJob = {
+export type BackendFetchJob = {
   id: string;
   job_type: FetchJobType;
   status: FetchJobStatus;

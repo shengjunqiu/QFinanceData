@@ -2,29 +2,16 @@ import { useQueries } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { isApiError } from "../../api/client";
-import { useJobsQuery } from "../../api/jobs";
-import { useDataStatusQuery } from "../../api/market";
-import { getLatestPrice, getPrices, pricesQueryKeys } from "../../api/prices";
-import { useSymbolsQuery } from "../../api/symbols";
+import { useMarketOverviewQuery } from "../../api/market";
+import { getPrices, pricesQueryKeys } from "../../api/prices";
 import type { DataStatus, FetchJob, SymbolQuote } from "../../api/types";
 import { ReturnChart } from "../../charts/ReturnChart";
 import { StatusBadge } from "../../components/StatusBadge";
-import { buildDashboardSummary } from "./dashboardData";
 
 export function DashboardPage() {
-  const symbolsQuery = useSymbolsQuery();
-  const dataStatusQuery = useDataStatusQuery();
-  const jobsQuery = useJobsQuery({ limit: 4 });
-  const symbols = symbolsQuery.data ?? [];
-  const trendSymbols = symbols.slice(0, 5).map((quote) => quote.symbol);
-
-  const latestQueries = useQueries({
-    queries: symbols.map((quote) => ({
-      enabled: symbols.length > 0,
-      queryFn: ({ signal }) => getLatestPrice(quote.symbol, { interval: "1d" }, { signal }),
-      queryKey: pricesQueryKeys.latest(quote.symbol, { interval: "1d" })
-    }))
-  });
+  const overviewQuery = useMarketOverviewQuery();
+  const overview = overviewQuery.data;
+  const trendSymbols = overview?.watchlist.slice(0, 5).map((quote) => quote.symbol) ?? [];
 
   const priceSeriesQueries = useQueries({
     queries: trendSymbols.map((symbol) => ({
@@ -34,27 +21,26 @@ export function DashboardPage() {
     }))
   });
 
-  const dashboard = buildDashboardSummary({
-    symbols,
-    latestPrices: latestQueries.map((query) => query.data).filter((value) => value !== undefined),
-    dataStatusRecords: dataStatusQuery.data ?? [],
-    recentJobs: jobsQuery.data ?? [],
+  const dashboard = {
+    lastUpdateAt: overview?.lastUpdateAt ?? null,
+    marketIndices: overview?.marketIndices ?? [],
+    watchlist: overview?.watchlist ?? [],
+    topGainers: overview?.topGainers ?? [],
+    topLosers: overview?.topLosers ?? [],
+    freshness: overview?.freshness ?? {
+      fresh: 0,
+      stale: 0,
+      missing: 0,
+      failed: 0,
+      partial: 0
+    },
+    recentJobs: overview?.recentJobs ?? [],
     trendSeries: priceSeriesQueries.map((query) => query.data?.bars ?? [])
-  });
+  };
   const hasWatchlist = dashboard.watchlist.length > 0;
   const hasTrendData = dashboard.trendSeries.some((series) => series.length > 0);
-  const isLoading =
-    symbolsQuery.isLoading ||
-    dataStatusQuery.isLoading ||
-    jobsQuery.isLoading ||
-    latestQueries.some((query) => query.isLoading) ||
-    priceSeriesQueries.some((query) => query.isLoading);
-  const error =
-    symbolsQuery.error ??
-    dataStatusQuery.error ??
-    jobsQuery.error ??
-    latestQueries.find((query) => query.error)?.error ??
-    priceSeriesQueries.find((query) => query.error)?.error;
+  const isLoading = overviewQuery.isLoading || priceSeriesQueries.some((query) => query.isLoading);
+  const error = overviewQuery.error ?? priceSeriesQueries.find((query) => query.error)?.error;
 
   if (error) {
     return (
