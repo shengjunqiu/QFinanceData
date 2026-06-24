@@ -2,6 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from qfinancedata.config import Settings
+from qfinancedata.fetchers.metadata import MetadataFetcher
+from qfinancedata.fetchers.yf_client import YFinanceClient
 from qfinancedata.main import create_app
 
 
@@ -107,3 +109,61 @@ def test_list_symbols_can_filter_by_group(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert [symbol["symbol"] for symbol in response.json()] == ["0700.HK"]
+
+
+class FakeYFinance:
+    def __init__(self, info_by_symbol):
+        self.info_by_symbol = info_by_symbol
+        self.ticker_calls = []
+
+    def Ticker(self, ticker):
+        self.ticker_calls.append(ticker)
+        return FakeTicker(self.info_by_symbol[ticker])
+
+
+class FakeTicker:
+    def __init__(self, info):
+        self.info = info
+
+
+def test_create_symbol_fetches_metadata_when_yfinance_is_available(tmp_path) -> None:
+    sqlite_path = tmp_path / "qfinancedata.sqlite"
+    fake_yfinance = FakeYFinance(
+        {
+            "SPY": {
+                "longName": "SPDR S&P 500 ETF Trust",
+                "exchange": "PCX",
+                "quoteType": "ETF",
+                "currency": "USD",
+            }
+        }
+    )
+    app = create_app(
+        Settings(
+            environment="test",
+            data_dir=tmp_path,
+            sqlite_path=sqlite_path,
+        )
+    )
+    app.state.metadata_fetcher = MetadataFetcher(
+        YFinanceClient(yfinance_module=fake_yfinance),
+        raw_dir=tmp_path / "raw" / "metadata",
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.post("/api/symbols", json={"symbol": "spy"})
+        metadata_status = test_client.get(
+            "/api/data-status",
+            params={"symbol": "SPY", "data_type": "metadata"},
+        )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["symbol"] == "SPY"
+    assert payload["name"] == "SPDR S&P 500 ETF Trust"
+    assert payload["exchange"] == "PCX"
+    assert payload["asset_type"] == "etf"
+    assert payload["currency"] == "USD"
+    assert fake_yfinance.ticker_calls == ["SPY"]
+    assert metadata_status.json()[0]["status"] == "fresh"
+    assert (tmp_path / "raw" / "metadata" / "SPY.json").is_file()

@@ -41,6 +41,9 @@ class YFinanceDownloadClient(Protocol):
     def download(self, tickers: Sequence[str] | str, **kwargs: Any) -> Any:
         pass
 
+    def Ticker(self, ticker: str) -> Any:
+        pass
+
 
 @dataclass(frozen=True)
 class YFinanceClient:
@@ -69,6 +72,10 @@ class YFinanceClient:
         )
         validate_price_frame(frame)
         return frame
+
+    def fetch_metadata(self, symbol: str) -> dict[str, Any]:
+        normalized_symbol = normalize_symbols([symbol])[0]
+        return self._metadata_with_retries(normalized_symbol)
 
     def _download_with_retries(
         self,
@@ -105,6 +112,32 @@ class YFinanceClient:
                     time.sleep(self.retry_backoff_seconds)
 
         raise YFinanceTimeoutError("Timed out while downloading prices.") from last_error
+
+    def _metadata_with_retries(self, symbol: str) -> dict[str, Any]:
+        client = self._get_yfinance_module()
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                ticker_factory = getattr(client, "Ticker")
+                ticker = ticker_factory(symbol)
+                info = getattr(ticker, "info", None)
+                if callable(info):
+                    info = info()
+                validate_metadata(info)
+                return info
+            except (YFinanceEmptyResponseError, YFinanceSchemaError):
+                raise
+            except Exception as exc:
+                last_error = exc
+                if not is_timeout_error(exc):
+                    raise YFinanceRequestError(str(exc)) from exc
+                if attempt >= self.max_retries:
+                    break
+                if self.retry_backoff_seconds > 0:
+                    time.sleep(self.retry_backoff_seconds)
+
+        raise YFinanceTimeoutError("Timed out while fetching metadata.") from last_error
 
     def _get_yfinance_module(self) -> YFinanceDownloadClient:
         if self.yfinance_module is not None:
@@ -156,6 +189,15 @@ def validate_price_frame(frame: Any) -> None:
     if missing_fields:
         missing = ", ".join(sorted(missing_fields))
         raise YFinanceSchemaError(f"yfinance response is missing fields: {missing}.")
+
+
+def validate_metadata(info: Any) -> None:
+    if info is None:
+        raise YFinanceEmptyResponseError("yfinance returned no metadata.")
+    if not isinstance(info, dict):
+        raise YFinanceSchemaError("yfinance metadata response must be a mapping.")
+    if not info:
+        raise YFinanceEmptyResponseError("yfinance returned no metadata.")
 
 
 def extract_price_fields(columns: Any) -> set[str]:

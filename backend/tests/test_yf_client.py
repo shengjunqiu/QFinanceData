@@ -22,6 +22,7 @@ class FakeYFinance:
     def __init__(self, responses) -> None:
         self.responses = list(responses)
         self.calls = []
+        self.ticker_calls = []
 
     def download(self, tickers, **kwargs):
         self.calls.append({"tickers": tickers, **kwargs})
@@ -29,6 +30,18 @@ class FakeYFinance:
         if isinstance(response, BaseException):
             raise response
         return response
+
+    def Ticker(self, ticker):
+        self.ticker_calls.append(ticker)
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return FakeTicker(response)
+
+
+class FakeTicker:
+    def __init__(self, info) -> None:
+        self.info = info
 
 
 def valid_frame() -> FakeFrame:
@@ -140,3 +153,37 @@ def test_download_prices_rejects_empty_symbols() -> None:
 
     with pytest.raises(YFinanceValidationError, match="At least one symbol"):
         client.download_prices([" ", ""])
+
+
+def test_fetch_metadata_uses_ticker_info() -> None:
+    fake_yfinance = FakeYFinance(
+        [
+            {
+                "longName": "Apple Inc.",
+                "exchange": "NMS",
+                "quoteType": "EQUITY",
+                "currency": "USD",
+            }
+        ]
+    )
+    client = YFinanceClient(yfinance_module=fake_yfinance)
+
+    metadata = client.fetch_metadata(" aapl ")
+
+    assert metadata["longName"] == "Apple Inc."
+    assert fake_yfinance.ticker_calls == ["AAPL"]
+
+
+def test_fetch_metadata_retries_timeout() -> None:
+    fake_yfinance = FakeYFinance(
+        [
+            TimeoutError("timed out"),
+            {"longName": "Apple Inc."},
+        ]
+    )
+    client = YFinanceClient(max_retries=1, yfinance_module=fake_yfinance)
+
+    metadata = client.fetch_metadata("AAPL")
+
+    assert metadata["longName"] == "Apple Inc."
+    assert fake_yfinance.ticker_calls == ["AAPL", "AAPL"]

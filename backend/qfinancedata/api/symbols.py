@@ -2,19 +2,55 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from qfinancedata.fetchers.metadata import MetadataFetcher
+from qfinancedata.fetchers.yf_client import YFinanceClient
 from qfinancedata.schemas.symbols import SymbolCreate, SymbolRead, SymbolUpdate
+from qfinancedata.services.metadata import MetadataService
 from qfinancedata.services.symbols import (
     SymbolAlreadyExistsError,
     SymbolNotFoundError,
     SymbolService,
 )
-from qfinancedata.storage.repositories import SymbolRepository
+from qfinancedata.storage.repositories import DataStatusRepository, SymbolRepository
 
 router = APIRouter(prefix="/api/symbols", tags=["symbols"])
 
 
 def get_symbol_service(request: Request) -> SymbolService:
-    return SymbolService(SymbolRepository(request.app.state.settings.sqlite_path))
+    settings = request.app.state.settings
+    symbol_repository = SymbolRepository(settings.sqlite_path)
+    return SymbolService(
+        symbol_repository,
+        get_metadata_service(request, symbol_repository),
+    )
+
+
+def get_metadata_service(
+    request: Request,
+    symbol_repository: SymbolRepository,
+) -> MetadataService | None:
+    settings = request.app.state.settings
+    metadata_fetcher = getattr(request.app.state, "metadata_fetcher", None)
+    yfinance_module = getattr(request.app.state, "yfinance_module", None)
+    yf_client = getattr(request.app.state, "yf_client", None)
+
+    if metadata_fetcher is None:
+        if settings.environment == "test" and yfinance_module is None and yf_client is None:
+            return None
+        metadata_fetcher = MetadataFetcher(
+            yf_client
+            or YFinanceClient(
+                timeout=settings.request_timeout,
+                yfinance_module=yfinance_module,
+            ),
+            raw_dir=settings.data_dir / "raw" / "metadata",
+        )
+
+    return MetadataService(
+        symbol_repository,
+        DataStatusRepository(settings.sqlite_path),
+        metadata_fetcher,
+    )
 
 
 @router.get("", response_model=list[SymbolRead])
