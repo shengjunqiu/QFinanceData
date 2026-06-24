@@ -40,8 +40,26 @@ class FakeYFinance:
 
 
 class FakeTicker:
-    def __init__(self, info) -> None:
-        self.info = info
+    def __init__(self, payload) -> None:
+        if isinstance(payload, dict) and any(
+            key in payload
+            for key in (
+                "info",
+                "income_stmt",
+                "balance_sheet",
+                "cashflow",
+                "dividends",
+                "splits",
+            )
+        ):
+            self.info = payload.get("info", {})
+            self.income_stmt = payload.get("income_stmt", None)
+            self.balance_sheet = payload.get("balance_sheet", None)
+            self.cashflow = payload.get("cashflow", None)
+            self.dividends = payload.get("dividends", None)
+            self.splits = payload.get("splits", None)
+        else:
+            self.info = payload
 
 
 def valid_frame() -> FakeFrame:
@@ -187,3 +205,51 @@ def test_fetch_metadata_retries_timeout() -> None:
 
     assert metadata["longName"] == "Apple Inc."
     assert fake_yfinance.ticker_calls == ["AAPL", "AAPL"]
+
+
+def test_fetch_fundamentals_reads_ticker_payload() -> None:
+    fake_yfinance = FakeYFinance(
+        [
+            {
+                "info": {"marketCap": 1000, "currency": "USD"},
+                "income_stmt": FakeFrame(columns=["2023-12-31"]),
+                "balance_sheet": FakeFrame(columns=["2023-12-31"]),
+                "cashflow": FakeFrame(columns=["2023-12-31"]),
+            }
+        ]
+    )
+    client = YFinanceClient(yfinance_module=fake_yfinance)
+
+    payload = client.fetch_fundamentals(" aapl ")
+
+    assert payload["info"] == {"marketCap": 1000, "currency": "USD"}
+    assert payload["income"].columns == ["2023-12-31"]
+    assert fake_yfinance.ticker_calls == ["AAPL"]
+
+
+def test_fetch_fundamentals_maps_empty_payload() -> None:
+    fake_yfinance = FakeYFinance([{"info": {}}])
+    client = YFinanceClient(yfinance_module=fake_yfinance)
+
+    with pytest.raises(YFinanceEmptyResponseError, match="no fundamentals"):
+        client.fetch_fundamentals("AAPL")
+
+
+def test_fetch_actions_reads_dividends_and_splits() -> None:
+    fake_yfinance = FakeYFinance(
+        [
+            {
+                "dividends": {"2024-01-10": 0.24},
+                "splits": {"2020-08-31": 4.0},
+            }
+        ]
+    )
+    client = YFinanceClient(yfinance_module=fake_yfinance)
+
+    payload = client.fetch_actions(" aapl ")
+
+    assert payload == {
+        "dividends": {"2024-01-10": 0.24},
+        "splits": {"2020-08-31": 4.0},
+    }
+    assert fake_yfinance.ticker_calls == ["AAPL"]

@@ -17,11 +17,8 @@ JobStatus = Literal[
 JobItemStatus = Literal["queued", "running", "success", "failed", "skipped"]
 
 
-class PriceFetchRequest(BaseModel):
+class SymbolFetchRequest(BaseModel):
     symbols: list[str] | None = None
-    start: date | None = None
-    end: date | None = None
-    interval: str | None = Field(default=None, max_length=16)
 
     @field_validator("symbols")
     @classmethod
@@ -29,6 +26,12 @@ class PriceFetchRequest(BaseModel):
         if value is None:
             return None
         return [symbol.strip().upper() for symbol in value]
+
+
+class PriceFetchRequest(SymbolFetchRequest):
+    start: date | None = None
+    end: date | None = None
+    interval: str | None = Field(default=None, max_length=16)
 
     @field_validator("interval")
     @classmethod

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { mapCorporateAction } from "./actions";
+import { mapFundamentalSnapshot } from "./fundamentals";
 import { mapFetchJob } from "./jobs";
 import { mapDataStatusRecord, mapMarketOverview } from "./market";
 import { mapLatestPrice, mapPriceSeries } from "./prices";
@@ -104,6 +106,58 @@ describe("API mappers", () => {
       finishedAt: "2026-06-23T10:00:03Z",
       symbols: ["NVDA"],
       items: [{ jobId: "job_1", status: "skipped" }]
+    });
+  });
+
+  it("maps fundamental snapshots", () => {
+    expect(
+      mapFundamentalSnapshot({
+        symbol: "AAPL",
+        currency: "USD",
+        metrics: {
+          market_cap: 3_000_000_000,
+          trailing_pe: 30.5,
+          price_to_book: 12.2,
+          dividend_yield: 0.006,
+          fifty_two_week_high: 199,
+          fifty_two_week_low: 124
+        },
+        financial_summary: {
+          revenue: 1000,
+          net_income: 200,
+          free_cash_flow: 220,
+          debt_ratio: 0.24
+        },
+        last_fetch_at: "2026-06-23T10:00:00Z",
+        status: "fresh"
+      })
+    ).toMatchObject({
+      currency: "USD",
+      metrics: {
+        marketCap: 3_000_000_000,
+        trailingPe: 30.5
+      },
+      financialSummary: {
+        freeCashFlow: 220,
+        debtRatio: 0.24
+      },
+      lastFetchAt: "2026-06-23T10:00:00Z"
+    });
+  });
+
+  it("maps corporate actions", () => {
+    expect(
+      mapCorporateAction({
+        symbol: "AAPL",
+        action_type: "dividend",
+        ex_date: "2026-02-10",
+        value: 0.26
+      })
+    ).toMatchObject({
+      actionType: "dividend",
+      exDate: "2026-02-10",
+      symbol: "AAPL",
+      value: 0.26
     });
   });
 

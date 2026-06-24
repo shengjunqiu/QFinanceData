@@ -118,6 +118,10 @@ export type PriceFetchRequest = {
   interval?: PriceInterval;
 };
 
+export type SymbolFetchRequest = {
+  symbols?: string[];
+};
+
 export type FundamentalSnapshot = {
   symbol: string;
   currency: string;

@@ -2,12 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { actionsQueryKeys } from "../../api/actions";
 import { isApiError } from "../../api/client";
-import { jobsQueryKeys, useCreatePriceFetchJobMutation, useJobQuery, useJobsQuery } from "../../api/jobs";
+import { fundamentalsQueryKeys } from "../../api/fundamentals";
+import {
+  jobsQueryKeys,
+  useCreateActionsFetchJobMutation,
+  useCreateFundamentalsFetchJobMutation,
+  useCreatePriceFetchJobMutation,
+  useJobQuery,
+  useJobsQuery
+} from "../../api/jobs";
 import { marketQueryKeys } from "../../api/market";
 import { pricesQueryKeys } from "../../api/prices";
 import { symbolsQueryKeys, useSymbolsQuery } from "../../api/symbols";
 import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus, FetchJobType } from "../../api/types";
+
+type RunnableJobType = "prices" | "fundamentals" | "actions";
 
 const jobStatusLabels: Record<FetchJobStatus | FetchJobItemStatus, string> = {
   queued: "Queued",
@@ -29,6 +40,8 @@ export function JobsPage() {
   const jobsQuery = useJobsQuery({ limit: 50 });
   const symbolsQuery = useSymbolsQuery();
   const createPriceFetchJobMutation = useCreatePriceFetchJobMutation();
+  const createFundamentalsFetchJobMutation = useCreateFundamentalsFetchJobMutation();
+  const createActionsFetchJobMutation = useCreateActionsFetchJobMutation();
   const jobs = jobsQuery.data ?? [];
   const activeSymbols = symbolsQuery.data?.map((symbol) => symbol.symbol) ?? [];
   const runningJobs = jobs.filter(isActiveJob);
@@ -40,7 +53,13 @@ export function JobsPage() {
     () => jobs.filter((job) => statusFilter === "all" || job.status === statusFilter),
     [jobs, statusFilter]
   );
-  const error = jobsQuery.error ?? symbolsQuery.error ?? selectedJobQuery.error ?? createPriceFetchJobMutation.error;
+  const error =
+    jobsQuery.error ??
+    symbolsQuery.error ??
+    selectedJobQuery.error ??
+    createPriceFetchJobMutation.error ??
+    createFundamentalsFetchJobMutation.error ??
+    createActionsFetchJobMutation.error;
 
   useEffect(() => {
     if (!selectedJobId && jobs[0]) {
@@ -54,26 +73,33 @@ export function JobsPage() {
     if (hadActiveJobsRef.current && !hasActiveJobs) {
       void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: fundamentalsQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
-      setMessage("Fetch jobs finished. Price and dashboard data refreshed.");
+      setMessage("Fetch jobs finished. Dashboard and detail data refreshed.");
     }
 
     hadActiveJobsRef.current = hasActiveJobs;
   }, [queryClient, runningJobs.length]);
 
-  async function createPriceJob(symbols: string[]) {
+  async function createFetchJob(jobType: RunnableJobType, symbols: string[]) {
     if (symbols.length === 0) {
-      setMessage("Add at least one enabled ticker before starting a price update.");
+      setMessage(`Add at least one enabled ticker before starting ${formatJobType(jobType).toLowerCase()} update.`);
       return;
     }
 
     try {
-      const job = await createPriceFetchJobMutation.mutateAsync({
-        interval: "1d",
-        symbols
-      });
+      const job =
+        jobType === "prices"
+          ? await createPriceFetchJobMutation.mutateAsync({
+              interval: "1d",
+              symbols
+            })
+          : jobType === "fundamentals"
+            ? await createFundamentalsFetchJobMutation.mutateAsync({ symbols })
+            : await createActionsFetchJobMutation.mutateAsync({ symbols });
       setSelectedJobId(job.id);
-      setMessage(`Queued price update for ${symbols.length} ticker${symbols.length > 1 ? "s" : ""}.`);
+      setMessage(`Queued ${formatJobType(jobType).toLowerCase()} update for ${symbols.length} ticker${symbols.length > 1 ? "s" : ""}.`);
       void queryClient.invalidateQueries({ queryKey: jobsQueryKeys.all });
     } catch (error) {
       setMessage(formatErrorMessage(error));
@@ -88,7 +114,12 @@ export function JobsPage() {
       return;
     }
 
-    void createPriceJob(retrySymbols);
+    if (job.type === "prices" || job.type === "fundamentals" || job.type === "actions") {
+      void createFetchJob(job.type, retrySymbols);
+      return;
+    }
+
+    setMessage(`Retry is not available for ${formatJobType(job.type)} jobs yet.`);
   }
 
   if (jobsQuery.isLoading || symbolsQuery.isLoading) {
@@ -117,8 +148,14 @@ export function JobsPage() {
       </div>
 
       <section className="jobs-actions" aria-label="Create fetch jobs">
-        <button disabled={createPriceFetchJobMutation.isPending} onClick={() => void createPriceJob(activeSymbols)} type="button">
+        <button disabled={createPriceFetchJobMutation.isPending} onClick={() => void createFetchJob("prices", activeSymbols)} type="button">
           {createPriceFetchJobMutation.isPending ? "Queueing Prices" : "Update Prices"}
+        </button>
+        <button disabled={createFundamentalsFetchJobMutation.isPending} onClick={() => void createFetchJob("fundamentals", activeSymbols)} type="button">
+          {createFundamentalsFetchJobMutation.isPending ? "Queueing Fundamentals" : "Update Fundamentals"}
+        </button>
+        <button disabled={createActionsFetchJobMutation.isPending} onClick={() => void createFetchJob("actions", activeSymbols)} type="button">
+          {createActionsFetchJobMutation.isPending ? "Queueing Actions" : "Update Actions"}
         </button>
         <span>{activeSymbols.length} enabled symbols</span>
       </section>

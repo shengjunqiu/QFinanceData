@@ -77,6 +77,14 @@ class YFinanceClient:
         normalized_symbol = normalize_symbols([symbol])[0]
         return self._metadata_with_retries(normalized_symbol)
 
+    def fetch_fundamentals(self, symbol: str) -> dict[str, Any]:
+        normalized_symbol = normalize_symbols([symbol])[0]
+        return self._fundamentals_with_retries(normalized_symbol)
+
+    def fetch_actions(self, symbol: str) -> dict[str, Any]:
+        normalized_symbol = normalize_symbols([symbol])[0]
+        return self._actions_with_retries(normalized_symbol)
+
     def _download_with_retries(
         self,
         symbols: Sequence[str],
@@ -139,6 +147,59 @@ class YFinanceClient:
 
         raise YFinanceTimeoutError("Timed out while fetching metadata.") from last_error
 
+    def _fundamentals_with_retries(self, symbol: str) -> dict[str, Any]:
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                ticker = self._ticker(symbol)
+                payload = {
+                    "info": read_ticker_attr(ticker, "info"),
+                    "income": read_first_ticker_attr(ticker, "income_stmt", "financials"),
+                    "balance_sheet": read_first_ticker_attr(ticker, "balance_sheet", "balancesheet"),
+                    "cashflow": read_first_ticker_attr(ticker, "cashflow", "cash_flow"),
+                }
+                validate_fundamentals(payload)
+                return payload
+            except (YFinanceEmptyResponseError, YFinanceSchemaError):
+                raise
+            except Exception as exc:
+                last_error = exc
+                if not is_timeout_error(exc):
+                    raise YFinanceRequestError(str(exc)) from exc
+                if attempt >= self.max_retries:
+                    break
+                if self.retry_backoff_seconds > 0:
+                    time.sleep(self.retry_backoff_seconds)
+
+        raise YFinanceTimeoutError("Timed out while fetching fundamentals.") from last_error
+
+    def _actions_with_retries(self, symbol: str) -> dict[str, Any]:
+        last_error: Exception | None = None
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                ticker = self._ticker(symbol)
+                return {
+                    "dividends": read_ticker_attr(ticker, "dividends"),
+                    "splits": read_ticker_attr(ticker, "splits"),
+                }
+            except Exception as exc:
+                last_error = exc
+                if not is_timeout_error(exc):
+                    raise YFinanceRequestError(str(exc)) from exc
+                if attempt >= self.max_retries:
+                    break
+                if self.retry_backoff_seconds > 0:
+                    time.sleep(self.retry_backoff_seconds)
+
+        raise YFinanceTimeoutError("Timed out while fetching corporate actions.") from last_error
+
+    def _ticker(self, symbol: str) -> Any:
+        client = self._get_yfinance_module()
+        ticker_factory = getattr(client, "Ticker")
+        return ticker_factory(symbol)
+
     def _get_yfinance_module(self) -> YFinanceDownloadClient:
         if self.yfinance_module is not None:
             return self.yfinance_module
@@ -198,6 +259,37 @@ def validate_metadata(info: Any) -> None:
         raise YFinanceSchemaError("yfinance metadata response must be a mapping.")
     if not info:
         raise YFinanceEmptyResponseError("yfinance returned no metadata.")
+
+
+def validate_fundamentals(payload: dict[str, Any]) -> None:
+    if not any(has_payload(value) for value in payload.values()):
+        raise YFinanceEmptyResponseError("yfinance returned no fundamentals.")
+
+
+def read_ticker_attr(ticker: Any, name: str) -> Any:
+    value = getattr(ticker, name, None)
+    if callable(value):
+        return value()
+    return value
+
+
+def read_first_ticker_attr(ticker: Any, *names: str) -> Any:
+    for name in names:
+        value = read_ticker_attr(ticker, name)
+        if has_payload(value):
+            return value
+    return None
+
+
+def has_payload(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, dict):
+        return bool(value)
+    empty = getattr(value, "empty", None)
+    if empty is not None:
+        return not bool(empty)
+    return True
 
 
 def extract_price_fields(columns: Any) -> set[str]:

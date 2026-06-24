@@ -7,7 +7,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from qfinancedata import __version__
+from qfinancedata.api.actions import router as actions_router
 from qfinancedata.api.data_status import router as data_status_router
+from qfinancedata.api.fundamentals import router as fundamentals_router
 from qfinancedata.api.jobs import router as jobs_router
 from qfinancedata.api.market import router as market_router
 from qfinancedata.api.prices import router as prices_router
@@ -49,6 +51,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(market_router)
     app.include_router(prices_router)
+    app.include_router(fundamentals_router)
+    app.include_router(actions_router)
     app.include_router(data_status_router)
 
     return app

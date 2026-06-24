@@ -1,10 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { actionsQueryKeys } from "./actions";
 import { apiRequest, type ApiRequestOptions } from "./client";
+import { fundamentalsQueryKeys } from "./fundamentals";
 import { marketQueryKeys } from "./market";
 import { pricesQueryKeys } from "./prices";
 import { symbolsQueryKeys } from "./symbols";
-import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus, FetchJobType, PriceFetchRequest } from "./types";
+import type {
+  FetchJob,
+  FetchJobItem,
+  FetchJobItemStatus,
+  FetchJobStatus,
+  FetchJobType,
+  PriceFetchRequest,
+  SymbolFetchRequest
+} from "./types";
 
 export type BackendFetchJobItem = {
   id: string;
@@ -38,6 +48,10 @@ type BackendPriceFetchRequest = {
   interval?: string;
 };
 
+type BackendSymbolFetchRequest = {
+  symbols?: string[];
+};
+
 export type ListJobsParams = {
   limit?: number;
 };
@@ -68,10 +82,57 @@ export function useCreatePriceFetchJobMutation() {
     mutationFn: (input: PriceFetchRequest) => createPriceFetchJob(input),
     onSuccess: (job) => {
       queryClient.setQueryData(jobsQueryKeys.detail(job.id), job);
-      void queryClient.invalidateQueries({ queryKey: jobsQueryKeys.all });
-      void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
-      void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
-      void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
+      invalidateAfterJob(queryClient);
+    }
+  });
+}
+
+export async function createFundamentalsFetchJob(
+  input: SymbolFetchRequest = {},
+  options: Pick<ApiRequestOptions, "signal"> = {}
+): Promise<FetchJob> {
+  const job = await apiRequest<BackendFetchJob>("/api/fetch/fundamentals", {
+    ...options,
+    body: toSymbolFetchPayload(input),
+    method: "POST"
+  });
+
+  return mapFetchJob(job);
+}
+
+export function useCreateFundamentalsFetchJobMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SymbolFetchRequest) => createFundamentalsFetchJob(input),
+    onSuccess: (job) => {
+      queryClient.setQueryData(jobsQueryKeys.detail(job.id), job);
+      invalidateAfterJob(queryClient);
+    }
+  });
+}
+
+export async function createActionsFetchJob(
+  input: SymbolFetchRequest = {},
+  options: Pick<ApiRequestOptions, "signal"> = {}
+): Promise<FetchJob> {
+  const job = await apiRequest<BackendFetchJob>("/api/fetch/actions", {
+    ...options,
+    body: toSymbolFetchPayload(input),
+    method: "POST"
+  });
+
+  return mapFetchJob(job);
+}
+
+export function useCreateActionsFetchJobMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SymbolFetchRequest) => createActionsFetchJob(input),
+    onSuccess: (job) => {
+      queryClient.setQueryData(jobsQueryKeys.detail(job.id), job);
+      invalidateAfterJob(queryClient);
     }
   });
 }
@@ -158,6 +219,12 @@ function toPriceFetchPayload(input: PriceFetchRequest): BackendPriceFetchRequest
   };
 }
 
+function toSymbolFetchPayload(input: SymbolFetchRequest): BackendSymbolFetchRequest {
+  return {
+    symbols: input.symbols
+  };
+}
+
 function readSymbols(value: unknown, items: FetchJobItem[]): string[] {
   if (Array.isArray(value)) {
     return value.filter((item): item is string => typeof item === "string");
@@ -176,4 +243,13 @@ function formatDateParam(value: string | Date | undefined): string | undefined {
 
 function isActiveJob(job: FetchJob): boolean {
   return job.status === "queued" || job.status === "running";
+}
+
+function invalidateAfterJob(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: jobsQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: fundamentalsQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all });
+  void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
 }

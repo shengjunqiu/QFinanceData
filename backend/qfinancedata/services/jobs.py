@@ -4,7 +4,9 @@ from datetime import date, datetime, timezone
 
 from qfinancedata.fetchers.yf_client import normalize_symbols
 from qfinancedata.quality.validators import evaluate_data_status
-from qfinancedata.schemas.jobs import FetchJobRead, PriceFetchRequest
+from qfinancedata.schemas.jobs import FetchJobRead, PriceFetchRequest, SymbolFetchRequest
+from qfinancedata.services.actions import CorporateActionFetchService
+from qfinancedata.services.fundamentals import FundamentalFetchService
 from qfinancedata.services.prices import PriceFetchService
 from qfinancedata.storage.repositories import (
     DataStatusRepository,
@@ -28,6 +30,8 @@ class JobService:
         symbol_repository: SymbolRepository,
         data_status_repository: DataStatusRepository,
         price_fetch_service: PriceFetchService,
+        fundamental_fetch_service: FundamentalFetchService | None = None,
+        corporate_action_fetch_service: CorporateActionFetchService | None = None,
         *,
         default_start_date: date,
         default_interval: str,
@@ -37,6 +41,8 @@ class JobService:
         self.symbol_repository = symbol_repository
         self.data_status_repository = data_status_repository
         self.price_fetch_service = price_fetch_service
+        self.fundamental_fetch_service = fundamental_fetch_service
+        self.corporate_action_fetch_service = corporate_action_fetch_service
         self.default_start_date = default_start_date
         self.default_interval = default_interval
         self.stale_trading_days = stale_trading_days
@@ -125,6 +131,141 @@ class JobService:
         )
         return self.get_job(job_id)
 
+    def run_fundamentals_fetch_job(self, payload: SymbolFetchRequest) -> FetchJobRead:
+        if self.fundamental_fetch_service is None:
+            raise RuntimeError("Fundamental fetch service is not configured.")
+
+        symbols = self.resolve_symbols(payload.symbols)
+        job = self.job_repository.create_job(
+            "fundamentals",
+            params={"symbols": symbols},
+            symbols=symbols,
+        )
+        job_id = job["id"]
+        self.job_repository.mark_job_running(job_id)
+
+        success_count = 0
+        failure_count = 0
+        errors: list[str] = []
+
+        for symbol in symbols:
+            self.job_repository.mark_item_running(job_id, symbol)
+            try:
+                fetch_result = self.fundamental_fetch_service.fetch_symbol_fundamentals(
+                    symbol,
+                )
+            except Exception as exc:
+                failure_count += 1
+                error_type = type(exc).__name__
+                error_message = str(exc) or error_type
+                errors.append(f"{symbol}: {error_message}")
+                self.job_repository.mark_item_finished(
+                    job_id,
+                    symbol,
+                    status="failed",
+                    error_type=error_type,
+                    error_message=error_message,
+                )
+                self.data_status_repository.upsert_status(
+                    symbol=symbol,
+                    data_type="fundamentals",
+                    status="failed",
+                    last_fetch_at=utc_now_iso(),
+                    last_error=error_message,
+                )
+            else:
+                success_count += 1
+                self.job_repository.mark_item_finished(job_id, symbol, status="success")
+                data_status = "fresh" if fetch_result.facts_written > 0 else "missing"
+                self.data_status_repository.upsert_status(
+                    symbol=symbol,
+                    data_type="fundamentals",
+                    status=data_status,
+                    last_data_at=to_iso(fetch_result.last_data_at),
+                    last_fetch_at=to_iso(fetch_result.fetched_at),
+                    last_success_at=(
+                        to_iso(fetch_result.fetched_at)
+                        if fetch_result.facts_written > 0
+                        else None
+                    ),
+                    last_error=None,
+                )
+
+        self.job_repository.mark_job_finished(
+            job_id,
+            status=resolve_job_status(
+                success_count=success_count,
+                failure_count=failure_count,
+            ),
+            error_summary="; ".join(errors) if errors else None,
+        )
+        return self.get_job(job_id)
+
+    def run_actions_fetch_job(self, payload: SymbolFetchRequest) -> FetchJobRead:
+        if self.corporate_action_fetch_service is None:
+            raise RuntimeError("Corporate action fetch service is not configured.")
+
+        symbols = self.resolve_symbols(payload.symbols)
+        job = self.job_repository.create_job(
+            "actions",
+            params={"symbols": symbols},
+            symbols=symbols,
+        )
+        job_id = job["id"]
+        self.job_repository.mark_job_running(job_id)
+
+        success_count = 0
+        failure_count = 0
+        errors: list[str] = []
+
+        for symbol in symbols:
+            self.job_repository.mark_item_running(job_id, symbol)
+            try:
+                fetch_result = self.corporate_action_fetch_service.fetch_symbol_actions(
+                    symbol,
+                )
+            except Exception as exc:
+                failure_count += 1
+                error_type = type(exc).__name__
+                error_message = str(exc) or error_type
+                errors.append(f"{symbol}: {error_message}")
+                self.job_repository.mark_item_finished(
+                    job_id,
+                    symbol,
+                    status="failed",
+                    error_type=error_type,
+                    error_message=error_message,
+                )
+                self.data_status_repository.upsert_status(
+                    symbol=symbol,
+                    data_type="actions",
+                    status="failed",
+                    last_fetch_at=utc_now_iso(),
+                    last_error=error_message,
+                )
+            else:
+                success_count += 1
+                self.job_repository.mark_item_finished(job_id, symbol, status="success")
+                self.data_status_repository.upsert_status(
+                    symbol=symbol,
+                    data_type="actions",
+                    status="fresh",
+                    last_data_at=to_iso(fetch_result.last_data_at),
+                    last_fetch_at=to_iso(fetch_result.fetched_at),
+                    last_success_at=to_iso(fetch_result.fetched_at),
+                    last_error=None,
+                )
+
+        self.job_repository.mark_job_finished(
+            job_id,
+            status=resolve_job_status(
+                success_count=success_count,
+                failure_count=failure_count,
+            ),
+            error_summary="; ".join(errors) if errors else None,
+        )
+        return self.get_job(job_id)
+
     def resolve_symbols(self, requested_symbols: list[str] | None) -> list[str]:
         if requested_symbols is not None:
             return normalize_symbols(requested_symbols)
@@ -146,7 +287,9 @@ def resolve_job_status(*, success_count: int, failure_count: int) -> str:
     return "partial_success"
 
 
-def to_iso(value: datetime) -> str:
+def to_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(

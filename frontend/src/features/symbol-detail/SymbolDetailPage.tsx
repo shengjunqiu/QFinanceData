@@ -2,11 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { useCorporateActionsQuery } from "../../api/actions";
 import { isApiError } from "../../api/client";
+import { useFundamentalsQuery } from "../../api/fundamentals";
 import { createPriceFetchJob, jobsQueryKeys } from "../../api/jobs";
 import { useDataStatusQuery, marketQueryKeys } from "../../api/market";
 import { pricesQueryKeys, useLatestPriceQuery, usePriceSeriesQuery } from "../../api/prices";
-import { mockCorporateActions, mockFundamentals } from "../../api/mockData";
 import { symbolsQueryKeys, useSymbolsQuery } from "../../api/symbols";
 import type { CorporateAction, DataStatusRecord, FundamentalSnapshot, SymbolQuote } from "../../api/types";
 import { PriceChart } from "../../charts/PriceChart";
@@ -31,6 +32,8 @@ export function SymbolDetailPage() {
   const priceSeriesQuery = usePriceSeriesQuery(symbol, { interval: "1d", range: rangeMap[range] });
   const latestPriceQuery = useLatestPriceQuery(symbol, { interval: "1d" });
   const dataStatusQuery = useDataStatusQuery({ symbol });
+  const fundamentalsQuery = useFundamentalsQuery(symbol);
+  const actionsQuery = useCorporateActionsQuery(symbol);
   const queryClient = useQueryClient();
   const refreshMutation = useMutation({
     mutationFn: () => createPriceFetchJob({ interval: "1d", symbols: [symbol] }),
@@ -86,8 +89,9 @@ export function SymbolDetailPage() {
 
   const bars = priceSeriesQuery.data?.bars ?? [];
   const priceError = priceSeriesQuery.error;
-  const fundamentals = mockFundamentals.find((item) => item.symbol === detailQuote.symbol);
-  const actions = mockCorporateActions.filter((item) => item.symbol === detailQuote.symbol);
+  const fundamentals = fundamentalsQuery.data;
+  const fundamentalsCurrency = fundamentals?.currency || detailQuote.currency;
+  const actions = actionsQuery.data ?? [];
   const statuses = dataStatusQuery.data ?? [];
 
   return (
@@ -147,9 +151,15 @@ export function SymbolDetailPage() {
         <section className="panel">
           <div className="panel-heading">
             <h2>Key Metrics</h2>
-            {fundamentals ? <StatusBadge status={fundamentals.status} /> : <StatusBadge status="missing" />}
+            <StatusBadge status={fundamentalsQuery.error ? "failed" : fundamentals?.status ?? "missing"} />
           </div>
-          <MetricGrid items={buildMetricItems(fundamentals, detailQuote.currency)} />
+          {fundamentalsQuery.isLoading ? (
+            <EmptyState compact title="Loading metrics" description="Fetching local fundamentals snapshot." />
+          ) : fundamentalsQuery.error ? (
+            <EmptyState compact title="Metrics unavailable" description={formatErrorMessage(fundamentalsQuery.error)} />
+          ) : (
+            <MetricGrid items={buildMetricItems(fundamentals, fundamentalsCurrency)} />
+          )}
         </section>
 
         <section className="panel">
@@ -157,15 +167,27 @@ export function SymbolDetailPage() {
             <h2>Financial Summary</h2>
             <span>{fundamentals?.lastFetchAt ? formatDateTime(fundamentals.lastFetchAt) : "Not fetched"}</span>
           </div>
-          <MetricGrid items={buildFinancialItems(fundamentals, detailQuote.currency)} />
+          {fundamentalsQuery.isLoading ? (
+            <EmptyState compact title="Loading summary" description="Fetching latest financial statement facts." />
+          ) : fundamentalsQuery.error ? (
+            <EmptyState compact title="Summary unavailable" description={formatErrorMessage(fundamentalsQuery.error)} />
+          ) : (
+            <MetricGrid items={buildFinancialItems(fundamentals, fundamentalsCurrency)} />
+          )}
         </section>
 
         <section className="panel">
           <div className="panel-heading">
             <h2>Corporate Actions</h2>
-            <span>{actions.length} events</span>
+            <span>{actionsQuery.isLoading ? "Loading" : `${actions.length} events`}</span>
           </div>
-          <CorporateActionList actions={actions} currency={detailQuote.currency} />
+          {actionsQuery.isLoading ? (
+            <EmptyState compact title="Loading events" description="Fetching dividends and split history." />
+          ) : actionsQuery.error ? (
+            <EmptyState compact title="Events unavailable" description={formatErrorMessage(actionsQuery.error)} />
+          ) : (
+            <CorporateActionList actions={actions} currency={fundamentalsCurrency} />
+          )}
         </section>
 
         <section className="panel">
