@@ -7,7 +7,7 @@ import { isApiError } from "../../api/client";
 import { useFundamentalsQuery } from "../../api/fundamentals";
 import { createPriceFetchJob, jobsQueryKeys } from "../../api/jobs";
 import { useDataStatusQuery, marketQueryKeys } from "../../api/market";
-import { pricesQueryKeys, useLatestPriceQuery, usePriceSeriesQuery } from "../../api/prices";
+import { exportPricesCsv, pricesQueryKeys, useLatestPriceQuery, usePriceSeriesQuery } from "../../api/prices";
 import { symbolsQueryKeys, useSymbolsQuery } from "../../api/symbols";
 import type { CorporateAction, DataStatusRecord, FundamentalSnapshot, SymbolQuote } from "../../api/types";
 import { PriceChart } from "../../charts/PriceChart";
@@ -28,6 +28,8 @@ export function SymbolDetailPage() {
   const { symbol: symbolParam } = useParams();
   const symbol = decodeURIComponent(symbolParam ?? "").toUpperCase();
   const [range, setRange] = useState<TimeRange>("1Y");
+  const [pageMessage, setPageMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const symbolsQuery = useSymbolsQuery({ includeDisabled: true });
   const priceSeriesQuery = usePriceSeriesQuery(symbol, { interval: "1d", range: rangeMap[range] });
   const latestPriceQuery = useLatestPriceQuery(symbol, { interval: "1d" });
@@ -43,6 +45,7 @@ export function SymbolDetailPage() {
       void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
+      setPageMessage(`Queued price refresh for ${symbol}.`);
     }
   });
 
@@ -89,10 +92,31 @@ export function SymbolDetailPage() {
 
   const bars = priceSeriesQuery.data?.bars ?? [];
   const priceError = priceSeriesQuery.error;
+  const detailSymbol = detailQuote.symbol;
   const fundamentals = fundamentalsQuery.data;
   const fundamentalsCurrency = fundamentals?.currency || detailQuote.currency;
   const actions = actionsQuery.data ?? [];
   const statuses = dataStatusQuery.data ?? [];
+
+  async function exportCurrentPrices() {
+    if (bars.length === 0) {
+      setPageMessage("No price data is available for the selected range.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await exportPricesCsv(detailSymbol, {
+        interval: "1d",
+        range: rangeMap[range]
+      });
+      setPageMessage(`Exported ${detailSymbol} price data.`);
+    } catch (error) {
+      setPageMessage(formatErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <section className="page symbol-detail-page">
@@ -111,11 +135,13 @@ export function SymbolDetailPage() {
           <button disabled={refreshMutation.isPending} onClick={() => refreshMutation.mutate()} type="button">
             {refreshMutation.isPending ? "Refreshing" : "Refresh"}
           </button>
-          <button type="button">Export</button>
+          <button disabled={isExporting} onClick={() => void exportCurrentPrices()} type="button">
+            {isExporting ? "Exporting" : "Export"}
+          </button>
         </div>
       </header>
       {refreshMutation.error ? <p className="inline-message inline-message-error">{formatErrorMessage(refreshMutation.error)}</p> : null}
-      {refreshMutation.isSuccess ? <p className="inline-message">Queued price refresh for {detailQuote.symbol}.</p> : null}
+      {pageMessage ? <p className="inline-message">{pageMessage}</p> : null}
 
       <div className="symbol-detail-grid">
         <section className="panel chart-panel panel-full">
@@ -172,7 +198,10 @@ export function SymbolDetailPage() {
           ) : fundamentalsQuery.error ? (
             <EmptyState compact title="Summary unavailable" description={formatErrorMessage(fundamentalsQuery.error)} />
           ) : (
-            <MetricGrid items={buildFinancialItems(fundamentals, fundamentalsCurrency)} />
+            <>
+              <MetricGrid items={buildFinancialItems(fundamentals, fundamentalsCurrency)} />
+              <MissingFieldsNotice fields={fundamentals?.missingFields ?? []} />
+            </>
           )}
         </section>
 
@@ -255,7 +284,7 @@ function MetricGrid({ items }: { items: Array<{ label: string; value: string }> 
 
 function CorporateActionList({ actions, currency }: { actions: CorporateAction[]; currency: string }) {
   if (actions.length === 0) {
-    return <EmptyState compact title="No events" description="No dividends or splits are available for this symbol." />;
+    return <EmptyState compact title="No events" description="No dividends or splits are available in local data for this symbol." />;
   }
 
   return (
@@ -270,6 +299,18 @@ function CorporateActionList({ actions, currency }: { actions: CorporateAction[]
         </div>
       ))}
     </div>
+  );
+}
+
+function MissingFieldsNotice({ fields }: { fields: string[] }) {
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <p className="panel-note">
+      Missing fields: {fields.map(formatFieldLabel).join(", ")}
+    </p>
   );
 }
 
@@ -399,6 +440,13 @@ function formatPercent(value: number | null) {
     maximumFractionDigits: 2,
     style: "percent"
   }).format(value);
+}
+
+function formatFieldLabel(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function formatDateTime(value: string) {

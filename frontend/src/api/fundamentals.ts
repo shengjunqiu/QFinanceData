@@ -24,6 +24,7 @@ export type BackendFundamentalSnapshot = {
   currency: string;
   metrics: BackendFundamentalMetrics;
   financial_summary: BackendFinancialSummary;
+  missing_fields: string[];
   last_fetch_at: string | null;
   status: DataStatus;
 };
@@ -70,6 +71,7 @@ export function mapFundamentalSnapshot(snapshot: BackendFundamentalSnapshot): Fu
       freeCashFlow: snapshot.financial_summary.free_cash_flow,
       debtRatio: snapshot.financial_summary.debt_ratio
     },
+    missingFields: snapshot.missing_fields,
     lastFetchAt: snapshot.last_fetch_at,
     status: snapshot.status
   };

@@ -4,6 +4,8 @@ export type DataStatus = "fresh" | "stale" | "missing" | "failed" | "partial";
 
 export type DataType = "prices" | "metadata" | "fundamentals" | "actions";
 
+export type FreshnessByType = Record<DataType, Record<DataStatus, number>>;
+
 export type FetchJobStatus = "queued" | "running" | "success" | "partial_success" | "failed" | "cancelled";
 
 export type FetchJobItemStatus = FetchJobStatus | "skipped";
@@ -139,6 +141,7 @@ export type FundamentalSnapshot = {
     freeCashFlow: number | null;
     debtRatio: number | null;
   };
+  missingFields: string[];
   lastFetchAt: string | null;
   status: DataStatus;
 };

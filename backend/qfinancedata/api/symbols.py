@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from qfinancedata.fetchers.metadata import MetadataFetcher
 from qfinancedata.fetchers.yf_client import YFinanceClient
 from qfinancedata.schemas.symbols import SymbolCreate, SymbolRead, SymbolUpdate
+from qfinancedata.services.exports import csv_response, rows_to_csv
 from qfinancedata.services.metadata import MetadataService
 from qfinancedata.services.symbols import (
     SymbolAlreadyExistsError,
@@ -63,6 +64,59 @@ def list_symbols(
         include_disabled=include_disabled,
         group_name=group_name,
     )
+
+
+@router.get("/export")
+def export_symbols(
+    include_disabled: bool = Query(False),
+    group_name: str | None = Query(None),
+    service: SymbolService = Depends(get_symbol_service),
+):
+    symbols = service.list_symbols(
+        include_disabled=include_disabled,
+        group_name=group_name,
+    )
+    if not symbols:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No symbols are available to export.",
+        )
+
+    columns = [
+        "symbol",
+        "name",
+        "exchange",
+        "asset_type",
+        "currency",
+        "group_name",
+        "enabled",
+        "status",
+        "last_data_at",
+        "last_fetch_at",
+        "created_at",
+        "updated_at",
+    ]
+    content = rows_to_csv(
+        columns,
+        [
+            {
+                "symbol": symbol.symbol,
+                "name": symbol.name,
+                "exchange": symbol.exchange,
+                "asset_type": symbol.asset_type,
+                "currency": symbol.currency,
+                "group_name": symbol.group_name,
+                "enabled": symbol.enabled,
+                "status": symbol.status,
+                "last_data_at": symbol.last_data_at,
+                "last_fetch_at": symbol.last_fetch_at,
+                "created_at": symbol.created_at,
+                "updated_at": symbol.updated_at,
+            }
+            for symbol in symbols
+        ],
+    )
+    return csv_response(content, "watchlist_symbols.csv")
 
 
 @router.post("", response_model=SymbolRead, status_code=status.HTTP_201_CREATED)

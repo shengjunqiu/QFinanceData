@@ -71,23 +71,27 @@ class FundamentalQueryService:
             "fundamentals",
         )
 
+        metrics = FundamentalMetrics(
+            market_cap=value_for(latest_facts, "market_cap"),
+            trailing_pe=value_for(latest_facts, "trailing_pe"),
+            price_to_book=value_for(latest_facts, "price_to_book"),
+            dividend_yield=value_for(latest_facts, "dividend_yield"),
+            fifty_two_week_high=value_for(latest_facts, "fifty_two_week_high"),
+            fifty_two_week_low=value_for(latest_facts, "fifty_two_week_low"),
+        )
+        financial_summary = FinancialSummary(
+            revenue=value_for(latest_facts, "revenue"),
+            net_income=value_for(latest_facts, "net_income"),
+            free_cash_flow=free_cash_flow(latest_facts),
+            debt_ratio=debt_ratio(latest_facts),
+        )
+
         return FundamentalSnapshotRead(
             symbol=normalized_symbol,
             currency=read_currency(facts),
-            metrics=FundamentalMetrics(
-                market_cap=value_for(latest_facts, "market_cap"),
-                trailing_pe=value_for(latest_facts, "trailing_pe"),
-                price_to_book=value_for(latest_facts, "price_to_book"),
-                dividend_yield=value_for(latest_facts, "dividend_yield"),
-                fifty_two_week_high=value_for(latest_facts, "fifty_two_week_high"),
-                fifty_two_week_low=value_for(latest_facts, "fifty_two_week_low"),
-            ),
-            financial_summary=FinancialSummary(
-                revenue=value_for(latest_facts, "revenue"),
-                net_income=value_for(latest_facts, "net_income"),
-                free_cash_flow=free_cash_flow(latest_facts),
-                debt_ratio=debt_ratio(latest_facts),
-            ),
+            metrics=metrics,
+            financial_summary=financial_summary,
+            missing_fields=missing_fields(metrics, financial_summary),
             last_fetch_at=latest_fetch_at(facts) or read_datetime(
                 status_record,
                 "last_fetch_at",
@@ -145,6 +149,17 @@ def debt_ratio(facts_by_field: dict[str, FundamentalFact]) -> float | None:
     if total_assets is None or total_debt is None or total_assets == 0:
         return None
     return total_debt / total_assets
+
+
+def missing_fields(
+    metrics: FundamentalMetrics,
+    financial_summary: FinancialSummary,
+) -> list[str]:
+    fields = {
+        **metrics.model_dump(),
+        **financial_summary.model_dump(),
+    }
+    return [field for field, value in fields.items() if value is None]
 
 
 def read_currency(facts: list[FundamentalFact]) -> str:

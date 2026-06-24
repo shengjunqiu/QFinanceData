@@ -111,6 +111,48 @@ def test_list_symbols_can_filter_by_group(client: TestClient) -> None:
     assert [symbol["symbol"] for symbol in response.json()] == ["0700.HK"]
 
 
+def test_export_symbols_returns_watchlist_csv(client: TestClient) -> None:
+    client.post(
+        "/api/symbols",
+        json={
+            "symbol": "AAPL",
+            "name": "Apple Inc.",
+            "exchange": "NMS",
+            "asset_type": "equity",
+            "currency": "USD",
+            "group_name": "US Stocks",
+        },
+    )
+    client.post(
+        "/api/symbols",
+        json={"symbol": "0700.HK", "group_name": "HK Stocks"},
+    )
+
+    response = client.get(
+        "/api/symbols/export",
+        params={"group_name": "US Stocks", "include_disabled": True},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "watchlist_symbols.csv" in response.headers["content-disposition"]
+    lines = response.text.splitlines()
+    assert lines[0] == (
+        "symbol,name,exchange,asset_type,currency,group_name,enabled,status,"
+        "last_data_at,last_fetch_at,created_at,updated_at"
+    )
+    assert lines[1].startswith("AAPL,Apple Inc.,NMS,equity,USD,US Stocks,True,missing")
+
+
+def test_export_symbols_returns_not_found_for_empty_watchlist(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/symbols/export")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "No symbols are available to export."}
+
+
 class FakeYFinance:
     def __init__(self, info_by_symbol):
         self.info_by_symbol = info_by_symbol

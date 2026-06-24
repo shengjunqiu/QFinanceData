@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { isApiError } from "../../api/client";
 import { useMarketOverviewQuery } from "../../api/market";
 import { getPrices, pricesQueryKeys } from "../../api/prices";
-import type { DataStatus, FetchJob, SymbolQuote } from "../../api/types";
+import type { DataStatus, DataType, FetchJob, FreshnessByType, SymbolQuote } from "../../api/types";
 import { ReturnChart } from "../../charts/ReturnChart";
 import { StatusBadge } from "../../components/StatusBadge";
 
@@ -34,6 +34,7 @@ export function DashboardPage() {
       failed: 0,
       partial: 0
     },
+    freshnessByType: overview?.freshnessByType ?? emptyFreshnessByType(),
     recentJobs: overview?.recentJobs ?? [],
     trendSeries: priceSeriesQueries.map((query) => query.data?.bars ?? [])
   };
@@ -138,6 +139,20 @@ export function DashboardPage() {
                     <StatusBadge status={status as DataStatus} />
                     <strong>{count}</strong>
                   </Link>
+                ))}
+              </div>
+              <div className="freshness-type-list" aria-label="Data freshness by type">
+                {Object.entries(dashboard.freshnessByType).map(([dataType, counts]) => (
+                  <div className="freshness-type-row" key={dataType}>
+                    <span>{formatDataType(dataType as DataType)}</span>
+                    <div className="freshness-status-counts">
+                      {(["failed", "partial", "stale", "missing", "fresh"] as DataStatus[]).map((status) => (
+                        <small key={`${dataType}-${status}`}>
+                          {status}: {counts[status]}
+                        </small>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
@@ -247,6 +262,32 @@ function getJobDisplayStatus(job: FetchJob): DataStatus {
   }
 
   return "stale";
+}
+
+function emptyFreshnessByType(): FreshnessByType {
+  const empty = {
+    fresh: 0,
+    stale: 0,
+    missing: 0,
+    failed: 0,
+    partial: 0
+  };
+  return {
+    prices: { ...empty },
+    metadata: { ...empty },
+    fundamentals: { ...empty },
+    actions: { ...empty }
+  };
+}
+
+function formatDataType(value: DataType) {
+  const labels: Record<DataType, string> = {
+    prices: "Prices",
+    metadata: "Metadata",
+    fundamentals: "Fundamentals",
+    actions: "Actions"
+  };
+  return labels[value];
 }
 
 function formatCurrency(value: number | null, currency: string) {

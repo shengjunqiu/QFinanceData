@@ -334,6 +334,7 @@ export const mockFundamentals: FundamentalSnapshot[] = [
       freeCashFlow: 108800000000,
       debtRatio: 0.31
     },
+    missingFields: [],
     lastFetchAt: "2026-06-23T15:10:20+08:00",
     status: "fresh"
   },
@@ -354,6 +355,7 @@ export const mockFundamentals: FundamentalSnapshot[] = [
       freeCashFlow: null,
       debtRatio: 0.18
     },
+    missingFields: ["free_cash_flow"],
     lastFetchAt: "2026-06-23T15:10:48+08:00",
     status: "partial"
   },
@@ -374,6 +376,7 @@ export const mockFundamentals: FundamentalSnapshot[] = [
       freeCashFlow: 178000000000,
       debtRatio: 0.24
     },
+    missingFields: [],
     lastFetchAt: "2026-06-23T15:11:10+08:00",
     status: "fresh"
   }

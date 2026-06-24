@@ -6,7 +6,11 @@ from qfinancedata.schemas.market import MarketOverviewRead
 from qfinancedata.services.market import MarketOverviewService
 from qfinancedata.services.prices import PriceQueryService
 from qfinancedata.storage.parquet import PriceBarRepository
-from qfinancedata.storage.repositories import JobRepository, SymbolRepository
+from qfinancedata.storage.repositories import (
+    DataStatusRepository,
+    JobRepository,
+    SymbolRepository,
+)
 
 router = APIRouter(prefix="/api/market", tags=["market"])
 
@@ -21,6 +25,7 @@ def get_market_overview_service(request: Request) -> MarketOverviewService:
     return MarketOverviewService(
         SymbolRepository(settings.sqlite_path),
         JobRepository(settings.sqlite_path),
+        DataStatusRepository(settings.sqlite_path),
         PriceQueryService(price_bar_repository),
     )
 

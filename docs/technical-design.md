@@ -351,6 +351,36 @@ GET /api/data-status
     "missing": 0,
     "failed": 1
   },
+  "freshness_by_type": {
+    "prices": {
+      "fresh": 21,
+      "stale": 3,
+      "missing": 0,
+      "failed": 1,
+      "partial": 0
+    },
+    "metadata": {
+      "fresh": 20,
+      "stale": 0,
+      "missing": 4,
+      "failed": 1,
+      "partial": 0
+    },
+    "fundamentals": {
+      "fresh": 18,
+      "stale": 2,
+      "missing": 4,
+      "failed": 1,
+      "partial": 0
+    },
+    "actions": {
+      "fresh": 23,
+      "stale": 0,
+      "missing": 1,
+      "failed": 1,
+      "partial": 0
+    }
+  },
   "recent_jobs": []
 }
 ```
@@ -360,6 +390,7 @@ GET /api/data-status
 ```text
 GET /api/prices/{symbol}?interval=1d&range=1y
 GET /api/prices/{symbol}/latest
+GET /api/prices/{symbol}/export?interval=1d&range=all
 ```
 
 响应：
@@ -407,6 +438,7 @@ GET /api/fundamentals/{symbol}
     "free_cash_flow": 108800000000,
     "debt_ratio": 0.31
   },
+  "missing_fields": [],
   "last_fetch_at": "2026-06-23T16:30:00+08:00"
 }
 ```

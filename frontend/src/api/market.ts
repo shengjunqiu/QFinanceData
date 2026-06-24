@@ -2,7 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 
 import { apiRequest } from "./client";
 import { mapFetchJob, type BackendFetchJob } from "./jobs";
-import type { DataStatusRecord, DataType, FetchJob, SymbolQuote, DataStatus as DataStatusValue } from "./types";
+import type {
+  DataStatusRecord,
+  DataType,
+  FetchJob,
+  FreshnessByType,
+  SymbolQuote,
+  DataStatus as DataStatusValue
+} from "./types";
 
 type BackendDataStatusRecord = {
   symbol: string;
@@ -42,6 +49,7 @@ type BackendMarketOverview = {
   top_gainers: BackendMarketQuote[];
   top_losers: BackendMarketQuote[];
   freshness: Record<DataStatusValue, number>;
+  freshness_by_type: FreshnessByType;
   recent_jobs: BackendFetchJob[];
 };
 
@@ -57,6 +65,7 @@ export type MarketOverview = {
   topGainers: SymbolQuote[];
   topLosers: SymbolQuote[];
   freshness: Record<DataStatusValue, number>;
+  freshnessByType: FreshnessByType;
   recentJobs: FetchJob[];
 };
 
@@ -108,6 +117,7 @@ export function mapMarketOverview(overview: BackendMarketOverview): MarketOvervi
     topGainers: overview.top_gainers.map(mapMarketQuote),
     topLosers: overview.top_losers.map(mapMarketQuote),
     freshness: overview.freshness,
+    freshnessByType: overview.freshness_by_type,
     recentJobs: overview.recent_jobs.map(mapFetchJob)
   };
 }

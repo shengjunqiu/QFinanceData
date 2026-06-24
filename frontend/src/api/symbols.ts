@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiRequest, type ApiRequestOptions } from "./client";
+import { downloadCsv } from "./downloads";
 import type { AssetType, DataStatus, SymbolCreateInput, SymbolQuote, SymbolUpdateInput } from "./types";
 
 type BackendSymbol = {
@@ -56,6 +57,13 @@ export function useSymbolsQuery(params: ListSymbolsParams = {}) {
   return useQuery({
     queryFn: ({ signal }) => listSymbols(params, signal),
     queryKey: symbolsQueryKeys.list(params)
+  });
+}
+
+export async function exportSymbolsCsv(params: ListSymbolsParams = {}): Promise<void> {
+  await downloadCsv("/api/symbols/export", "watchlist_symbols.csv", {
+    include_disabled: params.includeDisabled,
+    group_name: params.groupName || undefined
   });
 }
 

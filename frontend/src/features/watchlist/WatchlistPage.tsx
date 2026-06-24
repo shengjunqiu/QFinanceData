@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 
 import { isApiError } from "../../api/client";
 import { useCreatePriceFetchJobMutation } from "../../api/jobs";
-import { useCreateSymbolMutation, useDeleteSymbolMutation, useSymbolsQuery, useUpdateSymbolMutation } from "../../api/symbols";
+import {
+  exportSymbolsCsv,
+  useCreateSymbolMutation,
+  useDeleteSymbolMutation,
+  useSymbolsQuery,
+  useUpdateSymbolMutation
+} from "../../api/symbols";
 import type { SymbolQuote } from "../../api/types";
 import { StatusBadge } from "../../components/StatusBadge";
 
@@ -12,6 +18,7 @@ export function WatchlistPage() {
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [tickerInput, setTickerInput] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const symbolsQuery = useSymbolsQuery({ includeDisabled: true });
   const createSymbolMutation = useCreateSymbolMutation();
@@ -23,7 +30,8 @@ export function WatchlistPage() {
     createSymbolMutation.isPending ||
     updateSymbolMutation.isPending ||
     deleteSymbolMutation.isPending ||
-    createPriceFetchJobMutation.isPending;
+    createPriceFetchJobMutation.isPending ||
+    isExporting;
   const mutationError =
     createSymbolMutation.error ??
     updateSymbolMutation.error ??
@@ -158,6 +166,26 @@ export function WatchlistPage() {
     }
   }
 
+  async function exportVisibleSymbols() {
+    if (visibleSymbols.length === 0) {
+      setMessage("No symbols are available to export for the current view.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await exportSymbolsCsv({
+        includeDisabled: true,
+        groupName: selectedGroup === "All" ? undefined : selectedGroup
+      });
+      setMessage(`Exported ${visibleSymbols.length} symbol${visibleSymbols.length > 1 ? "s" : ""}.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   if (symbolsQuery.isLoading) {
     return (
       <section className="page">
@@ -181,9 +209,14 @@ export function WatchlistPage() {
           <p className="eyebrow">Symbol Management</p>
           <h1>Watchlist</h1>
         </div>
-        <button className="primary-action" disabled={isMutating} onClick={() => void updateSelectedSymbols()} type="button">
-          {createPriceFetchJobMutation.isPending ? "Queueing" : "Update Selected"}
-        </button>
+        <div className="page-actions">
+          <button disabled={isMutating} onClick={() => void exportVisibleSymbols()} type="button">
+            {isExporting ? "Exporting" : "Export CSV"}
+          </button>
+          <button className="primary-action" disabled={isMutating} onClick={() => void updateSelectedSymbols()} type="button">
+            {createPriceFetchJobMutation.isPending ? "Queueing" : "Update Selected"}
+          </button>
+        </div>
       </div>
 
       <section className="watchlist-toolbar" aria-label="Watchlist controls">

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from qfinancedata.schemas.data_status import DataStatusValue
 
@@ -39,5 +39,6 @@ class FundamentalSnapshotRead(BaseModel):
     currency: str = ""
     metrics: FundamentalMetrics
     financial_summary: FinancialSummary
+    missing_fields: list[str] = Field(default_factory=list)
     last_fetch_at: datetime | None = None
     status: DataStatusValue = "missing"

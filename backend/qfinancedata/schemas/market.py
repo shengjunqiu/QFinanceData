@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from qfinancedata.schemas.data_status import DataStatusValue
+from qfinancedata.schemas.data_status import DataStatusValue, DataTypeValue
 from qfinancedata.schemas.jobs import FetchJobRead
 
 
@@ -35,4 +35,7 @@ class MarketOverviewRead(BaseModel):
     top_gainers: list[MarketQuoteRead] = Field(default_factory=list)
     top_losers: list[MarketQuoteRead] = Field(default_factory=list)
     freshness: dict[DataStatusValue, int]
+    freshness_by_type: dict[DataTypeValue, dict[DataStatusValue, int]] = Field(
+        default_factory=dict,
+    )
     recent_jobs: list[FetchJobRead] = Field(default_factory=list)

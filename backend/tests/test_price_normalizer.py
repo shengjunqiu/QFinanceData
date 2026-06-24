@@ -7,6 +7,7 @@ from qfinancedata.fetchers.prices import (
     DuplicatePriceBarError,
     PriceFrameEmptyError,
     PriceFrameSchemaError,
+    PriceFrameValueError,
     normalize_price_frame,
 )
 
@@ -139,4 +140,36 @@ def test_normalize_price_frame_rejects_duplicate_timestamps() -> None:
     )
 
     with pytest.raises(DuplicatePriceBarError, match="duplicate timestamps"):
+        normalize_price_frame(frame, ["AAPL"], interval="1d", fetched_at=FETCHED_AT)
+
+
+def test_normalize_price_frame_rejects_incoherent_ohlc_values() -> None:
+    frame = pd.DataFrame(
+        {
+            "Open": [100.0],
+            "High": [99.0],
+            "Low": [98.0],
+            "Close": [101.5],
+            "Volume": [1000],
+        },
+        index=pd.to_datetime(["2024-01-02"]),
+    )
+
+    with pytest.raises(PriceFrameValueError, match="high below OHLC values"):
+        normalize_price_frame(frame, ["AAPL"], interval="1d", fetched_at=FETCHED_AT)
+
+
+def test_normalize_price_frame_rejects_negative_volume() -> None:
+    frame = pd.DataFrame(
+        {
+            "Open": [100.0],
+            "High": [102.0],
+            "Low": [99.0],
+            "Close": [101.5],
+            "Volume": [-1],
+        },
+        index=pd.to_datetime(["2024-01-02"]),
+    )
+
+    with pytest.raises(PriceFrameValueError, match="negative volume"):
         normalize_price_frame(frame, ["AAPL"], interval="1d", fetched_at=FETCHED_AT)

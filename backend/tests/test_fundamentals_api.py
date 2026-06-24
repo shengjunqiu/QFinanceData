@@ -74,6 +74,7 @@ def test_get_fundamentals_returns_snapshot(client_with_fundamentals: TestClient)
     assert payload["financial_summary"]["revenue"] == 1000.0
     assert payload["financial_summary"]["free_cash_flow"] == 220.0
     assert payload["financial_summary"]["debt_ratio"] == 0.24
+    assert payload["missing_fields"] == ["fifty_two_week_high", "fifty_two_week_low"]
     assert payload["last_fetch_at"] == "2024-01-15T12:00:00Z"
 
 
@@ -88,4 +89,6 @@ def test_get_fundamentals_returns_missing_snapshot(
     assert payload["status"] == "missing"
     assert payload["metrics"]["market_cap"] is None
     assert payload["financial_summary"]["revenue"] is None
+    assert "market_cap" in payload["missing_fields"]
+    assert "revenue" in payload["missing_fields"]
     assert payload["last_fetch_at"] is None

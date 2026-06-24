@@ -145,6 +145,21 @@ a:focus-visible {
   gap: 12px;
 }
 
+.page-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.page-actions button {
+  border-radius: 6px;
+  font-weight: 700;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
 .symbol-search-form {
   flex: 1 1 360px;
   max-width: 520px;
@@ -337,6 +352,18 @@ h2 {
   text-decoration: none;
 }
 
+.panel-note {
+  background: #fff9eb;
+  border: 1px solid #edd39b;
+  border-radius: 6px;
+  color: #6f4b00;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+}
+
 .panel-wide {
   grid-row: span 2;
 }
@@ -414,6 +441,45 @@ h2 {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.freshness-type-list {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.freshness-type-row {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(96px, 0.45fr) minmax(0, 1fr);
+  min-height: 46px;
+  padding: 8px 10px;
+}
+
+.freshness-type-row > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.freshness-status-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: flex-end;
+}
+
+.freshness-status-counts small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .freshness-cell {

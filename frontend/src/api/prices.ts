@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { apiRequest, type ApiRequestOptions } from "./client";
+import { downloadCsv } from "./downloads";
 import type { LatestPrice, PriceBar, PriceInterval, PriceSeries, PriceSeriesStatus } from "./types";
 
 type BackendPriceBar = {
@@ -96,6 +97,22 @@ export function useLatestPriceQuery(symbol: string, params: LatestPriceParams = 
     queryFn: ({ signal }) => getLatestPrice(symbol, params, { signal }),
     queryKey: pricesQueryKeys.latest(symbol, params)
   });
+}
+
+export async function exportPricesCsv(
+  symbol: string,
+  params: PriceSeriesParams = {}
+): Promise<void> {
+  await downloadCsv(
+    `/api/prices/${encodeURIComponent(symbol)}/export`,
+    `${symbol.toUpperCase()}_${params.interval ?? "1d"}_prices.csv`,
+    {
+      interval: params.interval,
+      range: params.range,
+      start: formatDateParam(params.start),
+      end: formatDateParam(params.end)
+    }
+  );
 }
 
 export function mapPriceSeries(series: BackendPriceSeries): PriceSeries {

@@ -128,6 +128,7 @@ describe("API mappers", () => {
           free_cash_flow: 220,
           debt_ratio: 0.24
         },
+        missing_fields: ["price_to_book"],
         last_fetch_at: "2026-06-23T10:00:00Z",
         status: "fresh"
       })
@@ -141,6 +142,7 @@ describe("API mappers", () => {
         freeCashFlow: 220,
         debtRatio: 0.24
       },
+      missingFields: ["price_to_book"],
       lastFetchAt: "2026-06-23T10:00:00Z"
     });
   });
@@ -216,11 +218,44 @@ describe("API mappers", () => {
           failed: 0,
           partial: 0
         },
+        freshness_by_type: {
+          prices: {
+            fresh: 1,
+            stale: 0,
+            missing: 0,
+            failed: 0,
+            partial: 0
+          },
+          metadata: {
+            fresh: 0,
+            stale: 0,
+            missing: 1,
+            failed: 0,
+            partial: 0
+          },
+          fundamentals: {
+            fresh: 0,
+            stale: 1,
+            missing: 0,
+            failed: 0,
+            partial: 0
+          },
+          actions: {
+            fresh: 0,
+            stale: 0,
+            missing: 0,
+            failed: 1,
+            partial: 0
+          }
+        },
         recent_jobs: []
       })
     ).toMatchObject({
       lastUpdateAt: "2026-06-23T20:00:00Z",
       freshness: { fresh: 1 },
+      freshnessByType: {
+        actions: { failed: 1 }
+      },
       watchlist: [
         {
           changePct: 1.45,

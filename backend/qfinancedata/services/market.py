@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from qfinancedata.schemas.data_status import DataStatusValue
+from qfinancedata.schemas.data_status import DataStatusValue, DataTypeValue
 from qfinancedata.schemas.jobs import FetchJobRead
 from qfinancedata.schemas.market import MarketOverviewRead, MarketQuoteRead
 from qfinancedata.schemas.prices import LatestPriceResponse
 from qfinancedata.schemas.symbols import SymbolRead
+from qfinancedata.services.data_status import DATA_TYPES
 from qfinancedata.services.prices import PriceQueryService
-from qfinancedata.storage.repositories import JobRepository, SymbolRepository
+from qfinancedata.storage.repositories import (
+    DataStatusRepository,
+    JobRepository,
+    SymbolRepository,
+)
 
 FRESHNESS_STATUSES: tuple[DataStatusValue, ...] = (
     "fresh",
@@ -25,10 +30,12 @@ class MarketOverviewService:
         self,
         symbol_repository: SymbolRepository,
         job_repository: JobRepository,
+        data_status_repository: DataStatusRepository,
         price_query_service: PriceQueryService,
     ) -> None:
         self.symbol_repository = symbol_repository
         self.job_repository = job_repository
+        self.data_status_repository = data_status_repository
         self.price_query_service = price_query_service
 
     def get_overview(self) -> MarketOverviewRead:
@@ -54,6 +61,10 @@ class MarketOverviewService:
             )[:3],
             top_losers=sorted(movers, key=lambda quote: quote.change_percent or 0)[:3],
             freshness=count_freshness(quotes),
+            freshness_by_type=count_freshness_by_type(
+                symbols,
+                self.data_status_repository,
+            ),
             recent_jobs=recent_jobs,
         )
 
@@ -104,6 +115,32 @@ def count_freshness(quotes: list[MarketQuoteRead]) -> dict[DataStatusValue, int]
 
     for quote in quotes:
         counts[quote.status] += 1
+
+    return counts
+
+
+def count_freshness_by_type(
+    symbols: list[SymbolRead],
+    repository: DataStatusRepository,
+) -> dict[DataTypeValue, dict[DataStatusValue, int]]:
+    counts: dict[DataTypeValue, dict[DataStatusValue, int]] = {
+        data_type: {status: 0 for status in FRESHNESS_STATUSES}
+        for data_type in DATA_TYPES
+    }
+    if not symbols:
+        return counts
+
+    symbol_set = {symbol.symbol for symbol in symbols}
+    records = {
+        (record["symbol"], record["data_type"]): record["status"]
+        for record in repository.list_status()
+        if record["symbol"] in symbol_set and record["data_type"] in DATA_TYPES
+    }
+
+    for symbol in symbols:
+        for data_type in DATA_TYPES:
+            status = records.get((symbol.symbol, data_type), "missing")
+            counts[data_type][status] += 1
 
     return counts
 

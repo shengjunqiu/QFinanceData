@@ -123,3 +123,26 @@ def test_get_price_series_rejects_invalid_range(client_with_prices: TestClient) 
 
     assert response.status_code == 400
     assert "range must be" in response.json()["detail"]
+
+
+def test_export_price_series_returns_csv(client_with_prices: TestClient) -> None:
+    response = client_with_prices.get(
+        "/api/prices/AAPL/export",
+        params={"range": "all"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "AAPL_1d_prices.csv" in response.headers["content-disposition"]
+    lines = response.text.splitlines()
+    assert lines[0] == "symbol,interval,timestamp,open,high,low,close,adj_close,volume"
+    assert "AAPL,1d,2024-01-01T00:00:00+00:00,99.0,101.0,98.0,100.0,99.5,10000" in lines
+
+
+def test_export_price_series_returns_not_found_when_no_data(
+    client_with_prices: TestClient,
+) -> None:
+    response = client_with_prices.get("/api/prices/MSFT/export")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No price data is available to export for MSFT."

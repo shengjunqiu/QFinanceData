@@ -79,6 +79,36 @@ def test_market_overview_returns_stable_empty_shape(tmp_path) -> None:
             "failed": 0,
             "partial": 0,
         },
+        "freshness_by_type": {
+            "prices": {
+                "fresh": 0,
+                "stale": 0,
+                "missing": 0,
+                "failed": 0,
+                "partial": 0,
+            },
+            "metadata": {
+                "fresh": 0,
+                "stale": 0,
+                "missing": 0,
+                "failed": 0,
+                "partial": 0,
+            },
+            "fundamentals": {
+                "fresh": 0,
+                "stale": 0,
+                "missing": 0,
+                "failed": 0,
+                "partial": 0,
+            },
+            "actions": {
+                "fresh": 0,
+                "stale": 0,
+                "missing": 0,
+                "failed": 0,
+                "partial": 0,
+            },
+        },
         "recent_jobs": [],
     }
 
@@ -142,6 +172,21 @@ def test_market_overview_aggregates_dashboard_data(market_client) -> None:
         last_fetch_at="2024-01-08T12:00:00.000Z",
         last_error="timeout",
     )
+    data_status_repository.upsert_status(
+        symbol="AAPL",
+        data_type="fundamentals",
+        status="fresh",
+        last_data_at="2023-12-31T00:00:00.000Z",
+        last_fetch_at="2024-01-08T12:00:00.000Z",
+        last_success_at="2024-01-08T12:00:00.000Z",
+    )
+    data_status_repository.upsert_status(
+        symbol="SPY",
+        data_type="actions",
+        status="failed",
+        last_fetch_at="2024-01-08T12:00:00.000Z",
+        last_error="empty response",
+    )
     job_repository.create_job(
         "prices",
         params={"symbols": ["AAPL"], "interval": "1d"},
@@ -163,6 +208,27 @@ def test_market_overview_aggregates_dashboard_data(market_client) -> None:
         "fresh": 2,
         "stale": 0,
         "missing": 0,
+        "failed": 1,
+        "partial": 0,
+    }
+    assert payload["freshness_by_type"]["prices"] == {
+        "fresh": 2,
+        "stale": 0,
+        "missing": 0,
+        "failed": 1,
+        "partial": 0,
+    }
+    assert payload["freshness_by_type"]["fundamentals"] == {
+        "fresh": 1,
+        "stale": 0,
+        "missing": 2,
+        "failed": 0,
+        "partial": 0,
+    }
+    assert payload["freshness_by_type"]["actions"] == {
+        "fresh": 0,
+        "stale": 0,
+        "missing": 2,
         "failed": 1,
         "partial": 0,
     }
