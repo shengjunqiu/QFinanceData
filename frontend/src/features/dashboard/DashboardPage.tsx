@@ -1,19 +1,73 @@
+import { useQueries } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { mockDashboardSummary, mockPriceBarsBySymbol } from "../../api/mockData";
+import { isApiError } from "../../api/client";
+import { useJobsQuery } from "../../api/jobs";
+import { useDataStatusQuery } from "../../api/market";
+import { getLatestPrice, getPrices, pricesQueryKeys } from "../../api/prices";
+import { useSymbolsQuery } from "../../api/symbols";
 import type { DataStatus, FetchJob, SymbolQuote } from "../../api/types";
 import { ReturnChart } from "../../charts/ReturnChart";
 import { StatusBadge } from "../../components/StatusBadge";
+import { buildDashboardSummary } from "./dashboardData";
 
 export function DashboardPage() {
-  const dashboard = mockDashboardSummary;
-  const hasWatchlist = dashboard.watchlist.length > 0;
-  const hasError = false;
+  const symbolsQuery = useSymbolsQuery();
+  const dataStatusQuery = useDataStatusQuery();
+  const jobsQuery = useJobsQuery({ limit: 4 });
+  const symbols = symbolsQuery.data ?? [];
+  const trendSymbols = symbols.slice(0, 5).map((quote) => quote.symbol);
 
-  if (hasError) {
+  const latestQueries = useQueries({
+    queries: symbols.map((quote) => ({
+      enabled: symbols.length > 0,
+      queryFn: ({ signal }) => getLatestPrice(quote.symbol, { interval: "1d" }, { signal }),
+      queryKey: pricesQueryKeys.latest(quote.symbol, { interval: "1d" })
+    }))
+  });
+
+  const priceSeriesQueries = useQueries({
+    queries: trendSymbols.map((symbol) => ({
+      enabled: trendSymbols.length > 0,
+      queryFn: ({ signal }) => getPrices(symbol, { interval: "1d", range: "1y" }, { signal }),
+      queryKey: pricesQueryKeys.series(symbol, { interval: "1d", range: "1y" })
+    }))
+  });
+
+  const dashboard = buildDashboardSummary({
+    symbols,
+    latestPrices: latestQueries.map((query) => query.data).filter((value) => value !== undefined),
+    dataStatusRecords: dataStatusQuery.data ?? [],
+    recentJobs: jobsQuery.data ?? [],
+    trendSeries: priceSeriesQueries.map((query) => query.data?.bars ?? [])
+  });
+  const hasWatchlist = dashboard.watchlist.length > 0;
+  const hasTrendData = dashboard.trendSeries.some((series) => series.length > 0);
+  const isLoading =
+    symbolsQuery.isLoading ||
+    dataStatusQuery.isLoading ||
+    jobsQuery.isLoading ||
+    latestQueries.some((query) => query.isLoading) ||
+    priceSeriesQueries.some((query) => query.isLoading);
+  const error =
+    symbolsQuery.error ??
+    dataStatusQuery.error ??
+    jobsQuery.error ??
+    latestQueries.find((query) => query.error)?.error ??
+    priceSeriesQueries.find((query) => query.error)?.error;
+
+  if (error) {
     return (
       <section className="page">
-        <EmptyState title="Dashboard unavailable" description="The overview data could not be loaded." />
+        <EmptyState title="Dashboard unavailable" description={formatErrorMessage(error)} />
+      </section>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <section className="page">
+        <EmptyState title="Loading dashboard" description="Fetching symbols, prices, data status and recent jobs." />
       </section>
     );
   }
@@ -25,90 +79,100 @@ export function DashboardPage() {
           <p className="eyebrow">Market Overview</p>
           <h1>Dashboard</h1>
         </div>
-        <span className="status-pill">Updated {formatDateTime(dashboard.lastUpdateAt)}</span>
+        <span className="status-pill">{dashboard.lastUpdateAt ? `Updated ${formatDateTime(dashboard.lastUpdateAt)}` : "Not updated yet"}</span>
       </div>
-
-      <section className="market-strip" aria-label="Market summary">
-        {dashboard.marketIndices.map((index) => (
-          <MarketTile key={index.symbol} quote={index} />
-        ))}
-      </section>
 
       {!hasWatchlist ? (
         <EmptyState title="No symbols yet" description="Add a ticker in Watchlist to start building the dashboard." />
       ) : (
-        <div className="dashboard-grid">
-          <section className="panel watchlist-panel">
-            <div className="panel-heading">
-              <h2>Watchlist</h2>
-              <Link to="/watchlist">Manage</Link>
-            </div>
-            <div className="watchlist-table" role="table" aria-label="Watchlist overview">
-              <div className="watchlist-row watchlist-row-header" role="row">
-                <span>Symbol</span>
-                <span>Last</span>
-                <span>Change</span>
-                <span>Status</span>
+        <>
+          <section className="market-strip" aria-label="Market summary">
+            {dashboard.marketIndices.map((index) => (
+              <MarketTile key={index.symbol} quote={index} />
+            ))}
+          </section>
+
+          <div className="dashboard-grid">
+            <section className="panel watchlist-panel">
+              <div className="panel-heading">
+                <h2>Watchlist</h2>
+                <Link to="/watchlist">Manage</Link>
               </div>
-              {dashboard.watchlist.slice(0, 8).map((quote) => (
-                <Link className="watchlist-row watchlist-row-link" key={quote.symbol} role="row" to={`/symbols/${quote.symbol}`}>
-                  <span>
-                    <strong>{quote.symbol}</strong>
-                    <small>{quote.name}</small>
-                  </span>
-                  <span>{formatCurrency(quote.latestPrice, quote.currency)}</span>
-                  <ChangeValue value={quote.changePct} />
-                  <StatusBadge status={quote.status} />
-                </Link>
-              ))}
-            </div>
-          </section>
+              <div className="watchlist-table" role="table" aria-label="Watchlist overview">
+                <div className="watchlist-row watchlist-row-header" role="row">
+                  <span>Symbol</span>
+                  <span>Last</span>
+                  <span>Change</span>
+                  <span>Status</span>
+                </div>
+                {dashboard.watchlist.slice(0, 8).map((quote) => (
+                  <Link className="watchlist-row watchlist-row-link" key={quote.symbol} role="row" to={`/symbols/${quote.symbol}`}>
+                    <span>
+                      <strong>{quote.symbol}</strong>
+                      <small>{quote.name}</small>
+                    </span>
+                    <span>{formatCurrency(quote.latestPrice, quote.currency)}</span>
+                    <ChangeValue value={quote.changePct} />
+                    <StatusBadge status={quote.status} />
+                  </Link>
+                ))}
+              </div>
+            </section>
 
-          <section className="panel panel-wide">
-            <div className="panel-heading">
-              <h2>Watchlist Trend</h2>
-              <span>Equal weight return</span>
-            </div>
-            <ReturnChart series={dashboard.watchlist.slice(0, 5).map((quote) => mockPriceBarsBySymbol[quote.symbol] ?? [])} />
-          </section>
+            <section className="panel panel-wide">
+              <div className="panel-heading">
+                <h2>Watchlist Trend</h2>
+                <span>Equal weight return</span>
+              </div>
+              {hasTrendData ? (
+                <ReturnChart series={dashboard.trendSeries} />
+              ) : (
+                <EmptyState title="No trend data" description="Run a price fetch job to populate watchlist history." compact />
+              )}
+            </section>
 
-          <section className="panel">
-            <div className="panel-heading">
-              <h2>Top Movers</h2>
-            </div>
-            <div className="mover-columns">
-              <MoverList title="Gainers" quotes={dashboard.topGainers} />
-              <MoverList title="Losers" quotes={dashboard.topLosers} />
-            </div>
-          </section>
+            <section className="panel">
+              <div className="panel-heading">
+                <h2>Top Movers</h2>
+              </div>
+              <div className="mover-columns">
+                <MoverList title="Gainers" quotes={dashboard.topGainers} />
+                <MoverList title="Losers" quotes={dashboard.topLosers} />
+              </div>
+            </section>
 
-          <section className="panel">
-            <div className="panel-heading">
-              <h2>Data Freshness</h2>
-              <Link to="/jobs">Review</Link>
-            </div>
-            <div className="freshness-grid">
-              {Object.entries(dashboard.freshness).map(([status, count]) => (
-                <Link className="freshness-cell" key={status} to="/jobs">
-                  <StatusBadge status={status as DataStatus} />
-                  <strong>{count}</strong>
-                </Link>
-              ))}
-            </div>
-          </section>
+            <section className="panel">
+              <div className="panel-heading">
+                <h2>Data Freshness</h2>
+                <Link to="/jobs">Review</Link>
+              </div>
+              <div className="freshness-grid">
+                {Object.entries(dashboard.freshness).map(([status, count]) => (
+                  <Link className="freshness-cell" key={status} to="/jobs">
+                    <StatusBadge status={status as DataStatus} />
+                    <strong>{count}</strong>
+                  </Link>
+                ))}
+              </div>
+            </section>
 
-          <section className="panel panel-full">
-            <div className="panel-heading">
-              <h2>Recent Fetch Jobs</h2>
-              <Link to="/jobs">Open Jobs</Link>
-            </div>
-            <div className="jobs-list">
-              {dashboard.recentJobs.map((job) => (
-                <RecentJobRow job={job} key={job.id} />
-              ))}
-            </div>
-          </section>
-        </div>
+            <section className="panel panel-full">
+              <div className="panel-heading">
+                <h2>Recent Fetch Jobs</h2>
+                <Link to="/jobs">Open Jobs</Link>
+              </div>
+              {dashboard.recentJobs.length === 0 ? (
+                <EmptyState title="No fetch jobs yet" description="Start a job from the Jobs page to update prices." compact />
+              ) : (
+                <div className="jobs-list">
+                  {dashboard.recentJobs.map((job) => (
+                    <RecentJobRow job={job} key={job.id} />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </>
       )}
     </section>
   );
@@ -204,6 +268,12 @@ function formatCurrency(value: number | null, currency: string) {
     return "-";
   }
 
+  if (!currency) {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: value > 1000 ? 0 : 2
+    }).format(value);
+  }
+
   return new Intl.NumberFormat("en-US", {
     currency,
     maximumFractionDigits: value > 1000 ? 0 : 2,
@@ -218,4 +288,16 @@ function formatDateTime(value: string) {
     minute: "2-digit",
     month: "short"
   }).format(new Date(value));
+}
+
+function formatErrorMessage(error: unknown) {
+  if (isApiError(error)) {
+    return error.status === 0 ? error.message : `${error.message} (${error.status})`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "The overview data could not be loaded.";
 }

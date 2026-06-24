@@ -1,16 +1,35 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { mockWatchlist } from "../../api/mockData";
+import { isApiError } from "../../api/client";
+import { useCreatePriceFetchJobMutation } from "../../api/jobs";
+import { useCreateSymbolMutation, useDeleteSymbolMutation, useSymbolsQuery, useUpdateSymbolMutation } from "../../api/symbols";
 import type { SymbolQuote } from "../../api/types";
 import { StatusBadge } from "../../components/StatusBadge";
 
 export function WatchlistPage() {
-  const [symbols, setSymbols] = useState<SymbolQuote[]>(mockWatchlist);
   const [selectedGroup, setSelectedGroup] = useState("All");
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [tickerInput, setTickerInput] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+
+  const symbolsQuery = useSymbolsQuery({ includeDisabled: true });
+  const createSymbolMutation = useCreateSymbolMutation();
+  const updateSymbolMutation = useUpdateSymbolMutation();
+  const deleteSymbolMutation = useDeleteSymbolMutation();
+  const createPriceFetchJobMutation = useCreatePriceFetchJobMutation();
+  const symbols = symbolsQuery.data ?? [];
+  const isMutating =
+    createSymbolMutation.isPending ||
+    updateSymbolMutation.isPending ||
+    deleteSymbolMutation.isPending ||
+    createPriceFetchJobMutation.isPending;
+  const mutationError =
+    createSymbolMutation.error ??
+    updateSymbolMutation.error ??
+    deleteSymbolMutation.error ??
+    createPriceFetchJobMutation.error ??
+    null;
 
   const groups = useMemo(() => ["All", ...Array.from(new Set(symbols.map((symbol) => symbol.groupName)))], [symbols]);
   const visibleSymbols = useMemo(
@@ -19,7 +38,7 @@ export function WatchlistPage() {
   );
   const allVisibleSelected = visibleSymbols.length > 0 && visibleSymbols.every((symbol) => selectedSymbols.has(symbol.symbol));
 
-  function handleAddSymbol(event: FormEvent<HTMLFormElement>) {
+  async function handleAddSymbol(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const ticker = tickerInput.trim().toUpperCase();
 
@@ -33,25 +52,17 @@ export function WatchlistPage() {
       return;
     }
 
-    const newSymbol: SymbolQuote = {
-      symbol: ticker,
-      name: "Pending metadata",
-      exchange: "Unknown",
-      assetType: "equity",
-      currency: "USD",
-      groupName: selectedGroup === "All" ? "US Stocks" : selectedGroup,
-      latestPrice: null,
-      change: null,
-      changePct: null,
-      volume: null,
-      lastUpdate: null,
-      status: "missing"
-    };
-
-    setSymbols((current) => [newSymbol, ...current]);
-    setSelectedSymbols((current) => new Set(current).add(ticker));
-    setTickerInput("");
-    setMessage(`${ticker} added. Run an update to fetch price data.`);
+    try {
+      const created = await createSymbolMutation.mutateAsync({
+        symbol: ticker,
+        groupName: selectedGroup === "All" ? undefined : selectedGroup
+      });
+      setSelectedSymbols((current) => new Set(current).add(created.symbol));
+      setTickerInput("");
+      setMessage(`${created.symbol} added. Run an update to fetch price data.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
   }
 
   function toggleSymbol(symbol: string) {
@@ -82,23 +93,85 @@ export function WatchlistPage() {
     });
   }
 
-  function deleteSymbol(symbol: string) {
-    setSymbols((current) => current.filter((item) => item.symbol !== symbol));
-    setSelectedSymbols((current) => {
-      const next = new Set(current);
-      next.delete(symbol);
-      return next;
-    });
-    setMessage(`${symbol} removed from Watchlist. Historical data is not deleted.`);
+  async function removeSymbol(symbol: string) {
+    try {
+      await deleteSymbolMutation.mutateAsync(symbol);
+      setSelectedSymbols((current) => {
+        const next = new Set(current);
+        next.delete(symbol);
+        return next;
+      });
+      setMessage(`${symbol} removed from Watchlist. Historical data is not deleted.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
   }
 
-  function updateSelectedSymbols() {
+  async function updateGroup(symbol: string, groupName: string) {
+    const nextGroup = groupName.trim();
+    if (!nextGroup) {
+      setMessage("Group name cannot be empty.");
+      return;
+    }
+
+    try {
+      await updateSymbolMutation.mutateAsync({
+        symbol,
+        input: {
+          groupName: nextGroup
+        }
+      });
+      setMessage(`${symbol} moved to ${nextGroup}.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
+  }
+
+  async function toggleEnabled(symbol: SymbolQuote) {
+    try {
+      await updateSymbolMutation.mutateAsync({
+        symbol: symbol.symbol,
+        input: {
+          enabled: !(symbol.enabled ?? true)
+        }
+      });
+      setMessage(`${symbol.symbol} ${symbol.enabled ?? true ? "disabled" : "enabled"}.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
+  }
+
+  async function updateSelectedSymbols() {
     if (selectedSymbols.size === 0) {
       setMessage("Select at least one ticker before starting an update.");
       return;
     }
 
-    setMessage(`Queued price update for ${selectedSymbols.size} selected ticker${selectedSymbols.size > 1 ? "s" : ""}.`);
+    try {
+      await createPriceFetchJobMutation.mutateAsync({
+        interval: "1d",
+        symbols: Array.from(selectedSymbols)
+      });
+      setMessage(`Queued price update for ${selectedSymbols.size} selected ticker${selectedSymbols.size > 1 ? "s" : ""}.`);
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
+  }
+
+  if (symbolsQuery.isLoading) {
+    return (
+      <section className="page">
+        <EmptyState title="Loading watchlist" description="Fetching symbols from the local data store." />
+      </section>
+    );
+  }
+
+  if (symbolsQuery.error) {
+    return (
+      <section className="page">
+        <EmptyState title="Watchlist unavailable" description={formatErrorMessage(symbolsQuery.error)} />
+      </section>
+    );
   }
 
   return (
@@ -108,13 +181,13 @@ export function WatchlistPage() {
           <p className="eyebrow">Symbol Management</p>
           <h1>Watchlist</h1>
         </div>
-        <button className="primary-action" onClick={updateSelectedSymbols} type="button">
-          Update Selected
+        <button className="primary-action" disabled={isMutating} onClick={() => void updateSelectedSymbols()} type="button">
+          {createPriceFetchJobMutation.isPending ? "Queueing" : "Update Selected"}
         </button>
       </div>
 
       <section className="watchlist-toolbar" aria-label="Watchlist controls">
-        <form className="add-symbol-form" onSubmit={handleAddSymbol}>
+        <form className="add-symbol-form" onSubmit={(event) => void handleAddSymbol(event)}>
           <label className="visually-hidden" htmlFor="watchlist-ticker">
             Add ticker
           </label>
@@ -125,7 +198,9 @@ export function WatchlistPage() {
             placeholder="Add ticker..."
             value={tickerInput}
           />
-          <button type="submit">Add</button>
+          <button disabled={createSymbolMutation.isPending} type="submit">
+            {createSymbolMutation.isPending ? "Adding" : "Add"}
+          </button>
         </form>
 
         <div className="group-tabs" aria-label="Watchlist groups">
@@ -144,6 +219,7 @@ export function WatchlistPage() {
       </section>
 
       {message ? <p className="inline-message">{message}</p> : null}
+      {mutationError ? <p className="inline-message inline-message-error">{formatErrorMessage(mutationError)}</p> : null}
 
       <section className="panel watchlist-management-panel">
         <div className="panel-heading">
@@ -152,10 +228,7 @@ export function WatchlistPage() {
         </div>
 
         {visibleSymbols.length === 0 ? (
-          <div className="empty-state">
-            <strong>No symbols in this group</strong>
-            <p>Add a ticker or switch to another group.</p>
-          </div>
+          <EmptyState title="No symbols in this group" description="Add a ticker or switch to another group." />
         ) : (
           <div className="watchlist-management-table" role="table" aria-label="Watchlist management">
             <div className="watchlist-management-row watchlist-management-header" role="row">
@@ -170,6 +243,8 @@ export function WatchlistPage() {
               <span>Symbol</span>
               <span>Type</span>
               <span>Currency</span>
+              <span>Group</span>
+              <span>Enabled</span>
               <span>Last Update</span>
               <span>Status</span>
               <span />
@@ -188,17 +263,45 @@ export function WatchlistPage() {
                 <span>
                   <Link className="symbol-link" to={`/symbols/${symbol.symbol}`}>
                     <strong>{symbol.symbol}</strong>
-                    <small>{symbol.name}</small>
+                    <small>{symbol.name || "Pending metadata"}</small>
                   </Link>
                 </span>
                 <span>{formatAssetType(symbol.assetType)}</span>
-                <span>{symbol.currency}</span>
+                <span>{symbol.currency || "-"}</span>
+                <span>
+                  <input
+                    aria-label={`Group for ${symbol.symbol}`}
+                    className="table-input"
+                    defaultValue={symbol.groupName}
+                    disabled={updateSymbolMutation.isPending}
+                    key={`${symbol.symbol}-${symbol.groupName}`}
+                    onBlur={(event) => {
+                      if (event.currentTarget.value !== symbol.groupName) {
+                        void updateGroup(symbol.symbol, event.currentTarget.value);
+                      }
+                    }}
+                  />
+                </span>
+                <span>
+                  <input
+                    aria-label={`Enabled ${symbol.symbol}`}
+                    checked={symbol.enabled ?? true}
+                    disabled={updateSymbolMutation.isPending}
+                    onChange={() => void toggleEnabled(symbol)}
+                    type="checkbox"
+                  />
+                </span>
                 <span>{symbol.lastUpdate ?? "Never"}</span>
                 <span>
                   <StatusBadge status={symbol.status} />
                 </span>
                 <span>
-                  <button className="text-action danger-action" onClick={() => deleteSymbol(symbol.symbol)} type="button">
+                  <button
+                    className="text-action danger-action"
+                    disabled={deleteSymbolMutation.isPending}
+                    onClick={() => void removeSymbol(symbol.symbol)}
+                    type="button"
+                  >
                     Remove
                   </button>
                 </span>
@@ -213,4 +316,25 @@ export function WatchlistPage() {
 
 function formatAssetType(value: SymbolQuote["assetType"]) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function EmptyState({ description, title }: { description: string; title: string }) {
+  return (
+    <div className="empty-state">
+      <strong>{title}</strong>
+      <p>{description}</p>
+    </div>
+  );
+}
+
+function formatErrorMessage(error: unknown) {
+  if (isApiError(error)) {
+    return error.status === 0 ? error.message : `${error.message} (${error.status})`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "The request could not be completed.";
 }

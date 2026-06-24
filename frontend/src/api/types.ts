@@ -6,9 +6,13 @@ export type DataType = "prices" | "metadata" | "fundamentals" | "actions";
 
 export type FetchJobStatus = "queued" | "running" | "success" | "partial_success" | "failed" | "cancelled";
 
+export type FetchJobItemStatus = FetchJobStatus | "skipped";
+
 export type FetchJobType = "prices" | "fundamentals" | "actions" | "metadata";
 
 export type PriceInterval = "1d" | "1wk" | "1mo";
+
+export type PriceSeriesStatus = "ok" | "missing";
 
 export type SymbolQuote = {
   symbol: string;
@@ -23,6 +27,9 @@ export type SymbolQuote = {
   volume: number | null;
   lastUpdate: string | null;
   status: DataStatus;
+  enabled?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type PriceBar = {
@@ -37,11 +44,30 @@ export type PriceBar = {
   volume: number;
 };
 
+export type PriceSeries = {
+  symbol: string;
+  interval: PriceInterval;
+  range: string;
+  status: PriceSeriesStatus;
+  bars: PriceBar[];
+};
+
+export type LatestPrice = {
+  symbol: string;
+  interval: PriceInterval;
+  status: PriceSeriesStatus;
+  latestDataAt: string | null;
+  latestPrice: number | null;
+  change: number | null;
+  changePct: number | null;
+  volume: number | null;
+};
+
 export type FetchJobItem = {
   id: string;
   jobId: string;
   symbol: string;
-  status: FetchJobStatus;
+  status: FetchJobItemStatus;
   errorType?: string;
   errorMessage?: string;
   startedAt?: string;
@@ -70,6 +96,26 @@ export type DataStatusRecord = {
   lastFetchAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
+  updatedAt?: string | null;
+};
+
+export type SymbolCreateInput = {
+  symbol: string;
+  name?: string;
+  exchange?: string;
+  assetType?: AssetType;
+  currency?: string;
+  groupName?: string;
+  enabled?: boolean;
+};
+
+export type SymbolUpdateInput = Partial<Omit<SymbolCreateInput, "symbol">>;
+
+export type PriceFetchRequest = {
+  symbols?: string[];
+  start?: string | Date;
+  end?: string | Date;
+  interval?: PriceInterval;
 };
 
 export type FundamentalSnapshot = {

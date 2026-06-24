@@ -1,86 +1,110 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { mockJobs, mockWatchlist } from "../../api/mockData";
-import type { FetchJob, FetchJobItem, FetchJobStatus, FetchJobType } from "../../api/types";
+import { isApiError } from "../../api/client";
+import { jobsQueryKeys, useCreatePriceFetchJobMutation, useJobQuery, useJobsQuery } from "../../api/jobs";
+import { marketQueryKeys } from "../../api/market";
+import { pricesQueryKeys } from "../../api/prices";
+import { symbolsQueryKeys, useSymbolsQuery } from "../../api/symbols";
+import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus, FetchJobType } from "../../api/types";
 
-const jobStatusLabels: Record<FetchJobStatus, string> = {
+const jobStatusLabels: Record<FetchJobStatus | FetchJobItemStatus, string> = {
   queued: "Queued",
   running: "Running",
   success: "Success",
   partial_success: "Partial",
   failed: "Failed",
-  cancelled: "Cancelled"
+  cancelled: "Cancelled",
+  skipped: "Skipped"
 };
 
-const jobTypes: FetchJobType[] = ["prices", "fundamentals", "actions", "metadata"];
 const statusFilters: Array<"all" | FetchJobStatus> = ["all", "queued", "running", "success", "partial_success", "failed"];
 
 export function JobsPage() {
-  const [jobs, setJobs] = useState<FetchJob[]>(mockJobs);
-  const [selectedJobId, setSelectedJobId] = useState(mockJobs[0]?.id ?? "");
+  const [selectedJobId, setSelectedJobId] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | FetchJobStatus>("all");
   const [message, setMessage] = useState<string | null>(null);
-
-  const runningJobs = jobs.filter((job) => job.status === "running" || job.status === "queued");
+  const queryClient = useQueryClient();
+  const jobsQuery = useJobsQuery({ limit: 50 });
+  const symbolsQuery = useSymbolsQuery();
+  const createPriceFetchJobMutation = useCreatePriceFetchJobMutation();
+  const jobs = jobsQuery.data ?? [];
+  const activeSymbols = symbolsQuery.data?.map((symbol) => symbol.symbol) ?? [];
+  const runningJobs = jobs.filter(isActiveJob);
+  const hadActiveJobsRef = useRef(false);
+  const selectedJobFromList = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
+  const selectedJobQuery = useJobQuery(selectedJobFromList?.id ?? "");
+  const selectedJob = selectedJobQuery.data ?? selectedJobFromList;
   const filteredJobs = useMemo(
     () => jobs.filter((job) => statusFilter === "all" || job.status === statusFilter),
     [jobs, statusFilter]
   );
-  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? jobs[0];
+  const error = jobsQuery.error ?? symbolsQuery.error ?? selectedJobQuery.error ?? createPriceFetchJobMutation.error;
 
-  function createJob(type: FetchJobType) {
-    const symbols = mockWatchlist.slice(0, type === "prices" ? 6 : 3).map((symbol) => symbol.symbol);
-    const jobId = `job_${type}_${Date.now()}`;
-    const job: FetchJob = {
-      id: jobId,
-      type,
-      symbols,
-      status: "queued",
-      progressTotal: symbols.length,
-      progressDone: 0,
-      createdAt: new Date().toISOString(),
-      items: symbols.map((symbol) => ({
-        id: `item_${type}_${symbol}_${Date.now()}`,
-        jobId,
-        symbol,
-        status: "queued"
-      }))
-    };
+  useEffect(() => {
+    if (!selectedJobId && jobs[0]) {
+      setSelectedJobId(jobs[0].id);
+    }
+  }, [jobs, selectedJobId]);
 
-    setJobs((current) => [job, ...current]);
-    setSelectedJobId(job.id);
-    setMessage(`Queued ${type} update for ${symbols.length} symbols.`);
+  useEffect(() => {
+    const hasActiveJobs = runningJobs.length > 0;
+
+    if (hadActiveJobsRef.current && !hasActiveJobs) {
+      void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
+      void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
+      setMessage("Fetch jobs finished. Price and dashboard data refreshed.");
+    }
+
+    hadActiveJobsRef.current = hasActiveJobs;
+  }, [queryClient, runningJobs.length]);
+
+  async function createPriceJob(symbols: string[]) {
+    if (symbols.length === 0) {
+      setMessage("Add at least one enabled ticker before starting a price update.");
+      return;
+    }
+
+    try {
+      const job = await createPriceFetchJobMutation.mutateAsync({
+        interval: "1d",
+        symbols
+      });
+      setSelectedJobId(job.id);
+      setMessage(`Queued price update for ${symbols.length} ticker${symbols.length > 1 ? "s" : ""}.`);
+      void queryClient.invalidateQueries({ queryKey: jobsQueryKeys.all });
+    } catch (error) {
+      setMessage(formatErrorMessage(error));
+    }
   }
 
   function retryFailedItems(job: FetchJob) {
-    const retrySymbols = job.items.filter((item) => item.status === "failed" || item.status === "partial_success").map((item) => item.symbol);
+    const retrySymbols = job.items.filter((item) => item.status === "failed").map((item) => item.symbol);
 
     if (retrySymbols.length === 0) {
       setMessage("No failed items to retry for this job.");
       return;
     }
 
-    const retryJobId = `job_retry_${job.type}_${Date.now()}`;
-    const retryJob: FetchJob = {
-      id: retryJobId,
-      type: job.type,
-      symbols: retrySymbols,
-      status: "queued",
-      progressTotal: retrySymbols.length,
-      progressDone: 0,
-      createdAt: new Date().toISOString(),
-      items: retrySymbols.map((symbol) => ({
-        id: `item_retry_${job.type}_${symbol}_${Date.now()}`,
-        jobId: retryJobId,
-        symbol,
-        status: "queued"
-      }))
-    };
+    void createPriceJob(retrySymbols);
+  }
 
-    setJobs((current) => [retryJob, ...current]);
-    setSelectedJobId(retryJob.id);
-    setMessage(`Queued retry for ${retrySymbols.length} failed item${retrySymbols.length > 1 ? "s" : ""}.`);
+  if (jobsQuery.isLoading || symbolsQuery.isLoading) {
+    return (
+      <section className="page">
+        <EmptyState title="Loading jobs" description="Fetching recent fetch jobs and enabled symbols." />
+      </section>
+    );
+  }
+
+  if (jobsQuery.error || symbolsQuery.error) {
+    return (
+      <section className="page">
+        <EmptyState title="Jobs unavailable" description={formatErrorMessage(jobsQuery.error ?? symbolsQuery.error)} />
+      </section>
+    );
   }
 
   return (
@@ -93,14 +117,14 @@ export function JobsPage() {
       </div>
 
       <section className="jobs-actions" aria-label="Create fetch jobs">
-        {jobTypes.map((type) => (
-          <button key={type} onClick={() => createJob(type)} type="button">
-            Fetch {formatJobType(type)}
-          </button>
-        ))}
+        <button disabled={createPriceFetchJobMutation.isPending} onClick={() => void createPriceJob(activeSymbols)} type="button">
+          {createPriceFetchJobMutation.isPending ? "Queueing Prices" : "Update Prices"}
+        </button>
+        <span>{activeSymbols.length} enabled symbols</span>
       </section>
 
       {message ? <p className="inline-message">{message}</p> : null}
+      {error ? <p className="inline-message inline-message-error">{formatErrorMessage(error)}</p> : null}
 
       <div className="jobs-page-grid">
         <section className="panel">
@@ -109,10 +133,7 @@ export function JobsPage() {
             <span>{runningJobs.length} active</span>
           </div>
           {runningJobs.length === 0 ? (
-            <div className="empty-state empty-state-compact">
-              <strong>No active jobs</strong>
-              <p>Start a fetch job to see progress.</p>
-            </div>
+            <EmptyState compact title="No active jobs" description="Start a fetch job to see progress." />
           ) : (
             <div className="active-jobs-list">
               {runningJobs.map((job) => (
@@ -132,9 +153,17 @@ export function JobsPage() {
         <section className="panel panel-wide">
           <div className="panel-heading">
             <h2>Job Detail</h2>
-            {selectedJob ? <button className="text-action" onClick={() => retryFailedItems(selectedJob)} type="button">Retry Failed</button> : null}
+            {selectedJob ? (
+              <button className="text-action" onClick={() => retryFailedItems(selectedJob)} type="button">
+                Retry Failed
+              </button>
+            ) : null}
           </div>
-          {selectedJob ? <JobDetail job={selectedJob} /> : <div className="empty-state"><strong>No job selected</strong><p>Select a job to inspect item-level status.</p></div>}
+          {selectedJob ? (
+            <JobDetail job={selectedJob} isRefreshing={selectedJobQuery.isFetching && isActiveJob(selectedJob)} />
+          ) : (
+            <EmptyState title="No job selected" description="Start a price update to inspect item-level status." />
+          )}
         </section>
 
         <section className="panel panel-full">
@@ -154,31 +183,35 @@ export function JobsPage() {
               ))}
             </div>
           </div>
-          <div className="job-history-table" role="table" aria-label="Job history">
-            <div className="job-history-row job-history-header" role="row">
-              <span>Time</span>
-              <span>Type</span>
-              <span>Symbols</span>
-              <span>Status</span>
-              <span>Error</span>
+          {filteredJobs.length === 0 ? (
+            <EmptyState title="No jobs found" description="No fetch jobs match this status filter." />
+          ) : (
+            <div className="job-history-table" role="table" aria-label="Job history">
+              <div className="job-history-row job-history-header" role="row">
+                <span>Time</span>
+                <span>Type</span>
+                <span>Symbols</span>
+                <span>Status</span>
+                <span>Error</span>
+              </div>
+              {filteredJobs.map((job) => (
+                <button className="job-history-row" key={job.id} onClick={() => setSelectedJobId(job.id)} role="row" type="button">
+                  <span>{formatDateTime(job.createdAt)}</span>
+                  <span>{formatJobType(job.type)}</span>
+                  <span>{job.symbols.length}</span>
+                  <span><JobStatusBadge status={job.status} /></span>
+                  <span>{job.errorSummary ?? "-"}</span>
+                </button>
+              ))}
             </div>
-            {filteredJobs.map((job) => (
-              <button className="job-history-row" key={job.id} onClick={() => setSelectedJobId(job.id)} role="row" type="button">
-                <span>{formatDateTime(job.createdAt)}</span>
-                <span>{formatJobType(job.type)}</span>
-                <span>{job.symbols.length}</span>
-                <span><JobStatusBadge status={job.status} /></span>
-                <span>{job.errorSummary ?? "-"}</span>
-              </button>
-            ))}
-          </div>
+          )}
         </section>
       </div>
     </section>
   );
 }
 
-function JobDetail({ job }: { job: FetchJob }) {
+function JobDetail({ isRefreshing, job }: { isRefreshing: boolean; job: FetchJob }) {
   return (
     <div className="job-detail">
       <div className="job-detail-summary">
@@ -195,16 +228,20 @@ function JobDetail({ job }: { job: FetchJob }) {
           <strong>{job.progressDone}/{job.progressTotal}</strong>
         </div>
         <div>
-          <span>Created</span>
+          <span>{isRefreshing ? "Polling" : "Created"}</span>
           <strong>{formatDateTime(job.createdAt)}</strong>
         </div>
       </div>
       <ProgressMeter job={job} />
-      <div className="job-items-list">
-        {job.items.map((item) => (
-          <JobItemRow item={item} key={item.id} />
-        ))}
-      </div>
+      {job.items.length === 0 ? (
+        <EmptyState compact title="No item detail" description="This job has not produced item-level status yet." />
+      ) : (
+        <div className="job-items-list">
+          {job.items.map((item) => (
+            <JobItemRow item={item} key={item.id} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -232,8 +269,17 @@ function ProgressMeter({ job }: { job: FetchJob }) {
   );
 }
 
-function JobStatusBadge({ status }: { status: FetchJobStatus }) {
+function JobStatusBadge({ status }: { status: FetchJobStatus | FetchJobItemStatus }) {
   return <span className={`job-status-badge job-status-${status}`}>{jobStatusLabels[status]}</span>;
+}
+
+function EmptyState({ compact = false, description, title }: { compact?: boolean; description: string; title: string }) {
+  return (
+    <div className={compact ? "empty-state empty-state-compact" : "empty-state"}>
+      <strong>{title}</strong>
+      <p>{description}</p>
+    </div>
+  );
 }
 
 function formatJobType(type: FetchJobType) {
@@ -247,4 +293,20 @@ function formatDateTime(value: string) {
     minute: "2-digit",
     month: "short"
   }).format(new Date(value));
+}
+
+function formatErrorMessage(error: unknown) {
+  if (isApiError(error)) {
+    return error.status === 0 ? error.message : `${error.message} (${error.status})`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "The request could not be completed.";
+}
+
+function isActiveJob(job: FetchJob): boolean {
+  return job.status === "queued" || job.status === "running";
 }

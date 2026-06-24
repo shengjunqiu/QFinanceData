@@ -591,6 +591,12 @@ h2 {
   padding: 10px 12px;
 }
 
+.inline-message-error {
+  background: #fbe7e5;
+  border-color: #f0bab5;
+  color: var(--negative);
+}
+
 .watchlist-management-panel {
   min-width: 0;
 }
@@ -608,8 +614,12 @@ h2 {
   border-radius: 6px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 32px minmax(180px, 1.4fr) minmax(86px, 0.5fr) minmax(80px, 0.4fr) minmax(116px, 0.6fr) minmax(92px, 0.5fr) minmax(72px, 0.4fr);
+  grid-template-columns:
+    32px minmax(180px, 1.4fr) minmax(86px, 0.5fr) minmax(80px, 0.4fr)
+    minmax(136px, 0.7fr) minmax(74px, 0.35fr) minmax(116px, 0.6fr)
+    minmax(92px, 0.5fr) minmax(72px, 0.4fr);
   min-height: 56px;
+  min-width: 1040px;
   padding: 8px 10px;
 }
 
@@ -625,6 +635,15 @@ h2 {
 .watchlist-management-row input[type="checkbox"] {
   height: 16px;
   width: 16px;
+}
+
+.table-input {
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text);
+  min-height: 34px;
+  padding: 0 10px;
+  width: 100%;
 }
 
 .symbol-link {
@@ -930,6 +949,11 @@ h2 {
   color: var(--negative);
 }
 
+.job-status-skipped {
+  background: #eef1f5;
+  color: var(--muted);
+}
+
 .symbol-detail-page {
   display: grid;
   gap: 16px;
@@ -1201,12 +1225,15 @@ h2 {
   }
 
   .watchlist-management-row {
-    grid-template-columns: 28px minmax(160px, 1fr) minmax(92px, auto);
+    grid-template-columns: 28px minmax(150px, 1fr) minmax(92px, auto) minmax(72px, auto);
+    min-width: 0;
   }
 
   .watchlist-management-row > span:nth-child(3),
   .watchlist-management-row > span:nth-child(4),
   .watchlist-management-row > span:nth-child(5),
+  .watchlist-management-row > span:nth-child(6),
+  .watchlist-management-row > span:nth-child(7),
   .watchlist-management-header {
     display: none;
   }
