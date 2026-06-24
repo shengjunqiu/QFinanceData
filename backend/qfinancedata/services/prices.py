@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from qfinancedata.fetchers.prices import normalize_price_frame
 from qfinancedata.fetchers.yf_client import YFinanceClient
@@ -18,6 +18,8 @@ from qfinancedata.storage.parquet import PriceBarRepository
 class PriceFetchResult:
     symbol: str
     bars_written: int
+    last_data_at: datetime
+    fetched_at: datetime
 
 
 class PriceFetchService:
@@ -37,15 +39,26 @@ class PriceFetchService:
         end: date | str | None,
         interval: str,
     ) -> PriceFetchResult:
+        fetched_at = datetime.now(timezone.utc)
         frame = self.yf_client.download_prices(
             [symbol],
             start=start,
             end=end,
             interval=interval,
         )
-        bars = normalize_price_frame(frame, [symbol], interval=interval)
+        bars = normalize_price_frame(
+            frame,
+            [symbol],
+            interval=interval,
+            fetched_at=fetched_at,
+        )
         bars_written = self.price_bar_repository.write_price_bars(bars)
-        return PriceFetchResult(symbol=symbol, bars_written=bars_written)
+        return PriceFetchResult(
+            symbol=symbol,
+            bars_written=bars_written,
+            last_data_at=max(bar.timestamp for bar in bars),
+            fetched_at=fetched_at,
+        )
 
 
 class PriceQueryService:

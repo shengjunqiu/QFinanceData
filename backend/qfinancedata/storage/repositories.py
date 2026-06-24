@@ -309,6 +309,133 @@ class JobRepository:
         return [dict(row) for row in rows]
 
 
+class DataStatusRepository:
+    def __init__(self, sqlite_path: Path) -> None:
+        self.sqlite_path = sqlite_path
+
+    def list_status(
+        self,
+        *,
+        symbol: str | None = None,
+        data_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        where_clauses: list[str] = []
+        params: list[Any] = []
+
+        if symbol:
+            where_clauses.append("symbol = ?")
+            params.append(symbol.strip().upper())
+        if data_type:
+            where_clauses.append("data_type = ?")
+            params.append(data_type.strip())
+
+        query = """
+            SELECT *
+            FROM data_status
+        """
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+        query += " ORDER BY symbol ASC, data_type ASC"
+
+        with sqlite_connection(self.sqlite_path) as connection:
+            rows = connection.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_status(self, symbol: str, data_type: str) -> dict[str, Any] | None:
+        with sqlite_connection(self.sqlite_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM data_status
+                WHERE symbol = ? AND data_type = ?
+                """,
+                (symbol.strip().upper(), data_type.strip()),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def upsert_status(
+        self,
+        *,
+        symbol: str,
+        data_type: str,
+        status: str,
+        last_data_at: str | None = None,
+        last_fetch_at: str | None = None,
+        last_success_at: str | None = None,
+        last_error: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_symbol = symbol.strip().upper()
+        normalized_data_type = data_type.strip()
+        self.ensure_symbol(normalized_symbol)
+
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO data_status (
+                    symbol,
+                    data_type,
+                    status,
+                    last_data_at,
+                    last_fetch_at,
+                    last_success_at,
+                    last_error
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(symbol, data_type) DO UPDATE SET
+                    status = excluded.status,
+                    last_data_at = COALESCE(
+                        excluded.last_data_at,
+                        data_status.last_data_at
+                    ),
+                    last_fetch_at = excluded.last_fetch_at,
+                    last_success_at = COALESCE(
+                        excluded.last_success_at,
+                        data_status.last_success_at
+                    ),
+                    last_error = excluded.last_error,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                """,
+                (
+                    normalized_symbol,
+                    normalized_data_type,
+                    status,
+                    last_data_at,
+                    last_fetch_at,
+                    last_success_at,
+                    last_error,
+                ),
+            )
+            connection.commit()
+
+        record = self.get_status(normalized_symbol, normalized_data_type)
+        if record is None:
+            raise RuntimeError(f"Data status for {normalized_symbol} was not written.")
+        return record
+
+    def ensure_symbol(self, symbol: str) -> None:
+        with sqlite_connection(self.sqlite_path) as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO symbols (symbol, enabled)
+                VALUES (?, ?)
+                """,
+                (symbol.strip().upper(), 0),
+            )
+            connection.commit()
+
+    def missing_status(self, symbol: str, data_type: str) -> dict[str, Any]:
+        return {
+            "symbol": symbol.strip().upper(),
+            "data_type": data_type.strip(),
+            "status": "missing",
+            "last_data_at": None,
+            "last_fetch_at": None,
+            "last_success_at": None,
+            "last_error": None,
+            "updated_at": None,
+        }
+
+
 def _symbol_select_sql() -> str:
     return """
         SELECT

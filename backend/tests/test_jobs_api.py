@@ -82,6 +82,13 @@ def test_price_fetch_job_runs_successfully(app_with_fake_yfinance, tmp_path) -> 
         job_id = job["id"]
         assert client.get(f"/api/jobs/{job_id}").json()["id"] == job_id
         assert client.get("/api/jobs").json()[0]["id"] == job_id
+        status_response = client.get(
+            "/api/data-status",
+            params={"symbol": "AAPL", "data_type": "prices"},
+        )
+        assert status_response.status_code == 200
+        assert status_response.json()[0]["status"] == "stale"
+        assert status_response.json()[0]["last_data_at"] == "2024-01-03T00:00:00Z"
 
     repository = PriceBarRepository(tmp_path / "parquet")
     bars = repository.read_price_bars("AAPL", "1d")
@@ -116,6 +123,14 @@ def test_price_fetch_job_records_partial_success(app_with_fake_yfinance) -> None
     assert items["MSFT"]["status"] == "failed"
     assert items["MSFT"]["error_type"] == "YFinanceRequestError"
     assert "upstream changed" in items["MSFT"]["error_message"]
+
+    with TestClient(app) as client:
+        failed_status = client.get(
+            "/api/data-status",
+            params={"symbol": "MSFT", "data_type": "prices"},
+        ).json()[0]
+    assert failed_status["status"] == "failed"
+    assert "upstream changed" in failed_status["last_error"]
 
 
 def test_price_fetch_job_records_failed_job_when_all_items_fail(

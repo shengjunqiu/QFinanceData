@@ -7,7 +7,11 @@ from qfinancedata.schemas.jobs import FetchJobRead, PriceFetchRequest
 from qfinancedata.services.jobs import JobNotFoundError, JobService, NoSymbolsError
 from qfinancedata.services.prices import PriceFetchService
 from qfinancedata.storage.parquet import PriceBarRepository
-from qfinancedata.storage.repositories import JobRepository, SymbolRepository
+from qfinancedata.storage.repositories import (
+    DataStatusRepository,
+    JobRepository,
+    SymbolRepository,
+)
 
 router = APIRouter(tags=["jobs"])
 
@@ -32,9 +36,11 @@ def get_job_service(request: Request) -> JobService:
     return JobService(
         JobRepository(settings.sqlite_path),
         SymbolRepository(settings.sqlite_path),
+        DataStatusRepository(settings.sqlite_path),
         PriceFetchService(yf_client, price_bar_repository),
         default_start_date=settings.default_start_date,
         default_interval=settings.default_interval,
+        stale_trading_days=settings.stale_trading_days,
     )
 
 
