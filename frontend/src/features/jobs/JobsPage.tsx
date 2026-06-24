@@ -16,23 +16,25 @@ import {
 import { marketQueryKeys } from "../../api/market";
 import { pricesQueryKeys } from "../../api/prices";
 import { symbolsQueryKeys, useSymbolsQuery } from "../../api/symbols";
-import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus, FetchJobType } from "../../api/types";
+import type { FetchJob, FetchJobItem, FetchJobItemStatus, FetchJobStatus } from "../../api/types";
+import {
+  formatDateTime,
+  formatJobStatus,
+  formatJobType,
+  formatPercentComplete,
+  formatSymbolCount,
+  type AppCopy,
+  type Locale,
+  useI18n
+} from "../../i18n";
 
 type RunnableJobType = "prices" | "fundamentals" | "actions";
-
-const jobStatusLabels: Record<FetchJobStatus | FetchJobItemStatus, string> = {
-  queued: "Queued",
-  running: "Running",
-  success: "Success",
-  partial_success: "Partial",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  skipped: "Skipped"
-};
 
 const statusFilters: Array<"all" | FetchJobStatus> = ["all", "queued", "running", "success", "partial_success", "failed"];
 
 export function JobsPage() {
+  const { copy, locale } = useI18n();
+  const t = copy.jobs;
   const [selectedJobId, setSelectedJobId] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | FetchJobStatus>("all");
   const [message, setMessage] = useState<string | null>(null);
@@ -76,15 +78,15 @@ export function JobsPage() {
       void queryClient.invalidateQueries({ queryKey: fundamentalsQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: actionsQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
-      setMessage("Fetch jobs finished. Dashboard and detail data refreshed.");
+      setMessage(t.finishedMessage);
     }
 
     hadActiveJobsRef.current = hasActiveJobs;
-  }, [queryClient, runningJobs.length]);
+  }, [queryClient, runningJobs.length, t.finishedMessage]);
 
   async function createFetchJob(jobType: RunnableJobType, symbols: string[]) {
     if (symbols.length === 0) {
-      setMessage(`Add at least one enabled ticker before starting ${formatJobType(jobType).toLowerCase()} update.`);
+      setMessage(formatNoEnabledTickerMessage(jobType, copy, locale));
       return;
     }
 
@@ -99,10 +101,10 @@ export function JobsPage() {
             ? await createFundamentalsFetchJobMutation.mutateAsync({ symbols })
             : await createActionsFetchJobMutation.mutateAsync({ symbols });
       setSelectedJobId(job.id);
-      setMessage(`Queued ${formatJobType(jobType).toLowerCase()} update for ${symbols.length} ticker${symbols.length > 1 ? "s" : ""}.`);
+      setMessage(formatQueuedUpdateMessage(jobType, symbols.length, copy, locale));
       void queryClient.invalidateQueries({ queryKey: jobsQueryKeys.all });
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
@@ -110,7 +112,7 @@ export function JobsPage() {
     const retrySymbols = job.items.filter((item) => item.status === "failed").map((item) => item.symbol);
 
     if (retrySymbols.length === 0) {
-      setMessage("No failed items to retry for this job.");
+      setMessage(t.noFailedItems);
       return;
     }
 
@@ -119,13 +121,13 @@ export function JobsPage() {
       return;
     }
 
-    setMessage(`Retry is not available for ${formatJobType(job.type)} jobs yet.`);
+    setMessage(formatRetryUnavailableMessage(job.type, copy, locale));
   }
 
   if (jobsQuery.isLoading || symbolsQuery.isLoading) {
     return (
       <section className="page">
-        <EmptyState title="Loading jobs" description="Fetching recent fetch jobs and enabled symbols." />
+        <EmptyState title={t.loadingTitle} description={t.loadingDescription} />
       </section>
     );
   }
@@ -133,7 +135,7 @@ export function JobsPage() {
   if (jobsQuery.error || symbolsQuery.error) {
     return (
       <section className="page">
-        <EmptyState title="Jobs unavailable" description={formatErrorMessage(jobsQuery.error ?? symbolsQuery.error)} />
+        <EmptyState title={t.unavailableTitle} description={formatErrorMessage(jobsQuery.error ?? symbolsQuery.error, copy)} />
       </section>
     );
   }
@@ -142,45 +144,45 @@ export function JobsPage() {
     <section className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Fetch Operations</p>
-          <h1>Jobs</h1>
+          <p className="eyebrow">{t.fetchOperations}</p>
+          <h1>{t.title}</h1>
         </div>
       </div>
 
-      <section className="jobs-actions" aria-label="Create fetch jobs">
+      <section className="jobs-actions" aria-label={t.createFetchJobs}>
         <button disabled={createPriceFetchJobMutation.isPending} onClick={() => void createFetchJob("prices", activeSymbols)} type="button">
-          {createPriceFetchJobMutation.isPending ? "Queueing Prices" : "Update Prices"}
+          {createPriceFetchJobMutation.isPending ? t.queueingPrices : t.updatePrices}
         </button>
         <button disabled={createFundamentalsFetchJobMutation.isPending} onClick={() => void createFetchJob("fundamentals", activeSymbols)} type="button">
-          {createFundamentalsFetchJobMutation.isPending ? "Queueing Fundamentals" : "Update Fundamentals"}
+          {createFundamentalsFetchJobMutation.isPending ? t.queueingFundamentals : t.updateFundamentals}
         </button>
         <button disabled={createActionsFetchJobMutation.isPending} onClick={() => void createFetchJob("actions", activeSymbols)} type="button">
-          {createActionsFetchJobMutation.isPending ? "Queueing Actions" : "Update Actions"}
+          {createActionsFetchJobMutation.isPending ? t.queueingActions : t.updateActions}
         </button>
-        <span>{activeSymbols.length} enabled symbols</span>
+        <span>{formatEnabledSymbolCount(activeSymbols.length, copy, locale)}</span>
       </section>
 
       {message ? <p className="inline-message">{message}</p> : null}
-      {error ? <p className="inline-message inline-message-error">{formatErrorMessage(error)}</p> : null}
+      {error ? <p className="inline-message inline-message-error">{formatErrorMessage(error, copy)}</p> : null}
 
       <div className="jobs-page-grid">
         <section className="panel">
           <div className="panel-heading">
-            <h2>Job Queue</h2>
-            <span>{runningJobs.length} active</span>
+            <h2>{t.jobQueue}</h2>
+            <span>{runningJobs.length} {t.active}</span>
           </div>
           {runningJobs.length === 0 ? (
-            <EmptyState compact title="No active jobs" description="Start a fetch job to see progress." />
+            <EmptyState compact title={t.noActiveTitle} description={t.noActiveDescription} />
           ) : (
             <div className="active-jobs-list">
               {runningJobs.map((job) => (
                 <button className="active-job-card" key={job.id} onClick={() => setSelectedJobId(job.id)} type="button">
                   <span>
-                    <strong>{formatJobType(job.type)}</strong>
-                    <small>{job.symbols.length} symbols · {formatDateTime(job.createdAt)}</small>
+                    <strong>{formatJobType(job.type, copy)}</strong>
+                    <small>{formatSymbolCount(job.symbols.length, locale)} · {formatDateTime(job.createdAt, locale)}</small>
                   </span>
-                  <JobStatusBadge status={job.status} />
-                  <ProgressMeter job={job} />
+                  <JobStatusBadge copy={copy} status={job.status} />
+                  <ProgressMeter job={job} locale={locale} />
                 </button>
               ))}
             </div>
@@ -189,24 +191,24 @@ export function JobsPage() {
 
         <section className="panel panel-wide">
           <div className="panel-heading">
-            <h2>Job Detail</h2>
+            <h2>{t.jobDetail}</h2>
             {selectedJob ? (
               <button className="text-action" onClick={() => retryFailedItems(selectedJob)} type="button">
-                Retry Failed
+                {t.retryFailed}
               </button>
             ) : null}
           </div>
           {selectedJob ? (
-            <JobDetail job={selectedJob} isRefreshing={selectedJobQuery.isFetching && isActiveJob(selectedJob)} />
+            <JobDetail copy={copy} job={selectedJob} isRefreshing={selectedJobQuery.isFetching && isActiveJob(selectedJob)} locale={locale} />
           ) : (
-            <EmptyState title="No job selected" description="Start a price update to inspect item-level status." />
+            <EmptyState title={t.noJobSelectedTitle} description={t.noJobSelectedDescription} />
           )}
         </section>
 
         <section className="panel panel-full">
           <div className="panel-heading">
-            <h2>History</h2>
-            <div className="job-filter-tabs" aria-label="Job status filter">
+            <h2>{t.history}</h2>
+            <div className="job-filter-tabs" aria-label={t.jobStatusFilter}>
               {statusFilters.map((status) => (
                 <button
                   aria-pressed={statusFilter === status}
@@ -215,28 +217,28 @@ export function JobsPage() {
                   onClick={() => setStatusFilter(status)}
                   type="button"
                 >
-                  {status === "all" ? "All" : jobStatusLabels[status]}
+                  {status === "all" ? copy.common.all : formatJobStatus(status, copy)}
                 </button>
               ))}
             </div>
           </div>
           {filteredJobs.length === 0 ? (
-            <EmptyState title="No jobs found" description="No fetch jobs match this status filter." />
+            <EmptyState title={t.noJobsFoundTitle} description={t.noJobsFoundDescription} />
           ) : (
-            <div className="job-history-table" role="table" aria-label="Job history">
+            <div className="job-history-table" role="table" aria-label={t.historyLabel}>
               <div className="job-history-row job-history-header" role="row">
-                <span>Time</span>
-                <span>Type</span>
-                <span>Symbols</span>
-                <span>Status</span>
-                <span>Error</span>
+                <span>{copy.common.time}</span>
+                <span>{copy.common.type}</span>
+                <span>{copy.common.symbols}</span>
+                <span>{copy.common.status}</span>
+                <span>{copy.common.error}</span>
               </div>
               {filteredJobs.map((job) => (
                 <button className="job-history-row" key={job.id} onClick={() => setSelectedJobId(job.id)} role="row" type="button">
-                  <span>{formatDateTime(job.createdAt)}</span>
-                  <span>{formatJobType(job.type)}</span>
+                  <span>{formatDateTime(job.createdAt, locale)}</span>
+                  <span>{formatJobType(job.type, copy)}</span>
                   <span>{job.symbols.length}</span>
-                  <span><JobStatusBadge status={job.status} /></span>
+                  <span><JobStatusBadge copy={copy} status={job.status} /></span>
                   <span>{job.errorSummary ?? "-"}</span>
                 </button>
               ))}
@@ -248,34 +250,34 @@ export function JobsPage() {
   );
 }
 
-function JobDetail({ isRefreshing, job }: { isRefreshing: boolean; job: FetchJob }) {
+function JobDetail({ copy, isRefreshing, job, locale }: { copy: AppCopy; isRefreshing: boolean; job: FetchJob; locale: Locale }) {
   return (
     <div className="job-detail">
       <div className="job-detail-summary">
         <div>
-          <span>Type</span>
-          <strong>{formatJobType(job.type)}</strong>
+          <span>{copy.common.type}</span>
+          <strong>{formatJobType(job.type, copy)}</strong>
         </div>
         <div>
-          <span>Status</span>
-          <JobStatusBadge status={job.status} />
+          <span>{copy.common.status}</span>
+          <JobStatusBadge copy={copy} status={job.status} />
         </div>
         <div>
-          <span>Progress</span>
+          <span>{copy.jobs.progress}</span>
           <strong>{job.progressDone}/{job.progressTotal}</strong>
         </div>
         <div>
-          <span>{isRefreshing ? "Polling" : "Created"}</span>
-          <strong>{formatDateTime(job.createdAt)}</strong>
+          <span>{isRefreshing ? copy.common.polling : copy.common.created}</span>
+          <strong>{formatDateTime(job.createdAt, locale)}</strong>
         </div>
       </div>
-      <ProgressMeter job={job} />
+      <ProgressMeter job={job} locale={locale} />
       {job.items.length === 0 ? (
-        <EmptyState compact title="No item detail" description="This job has not produced item-level status yet." />
+        <EmptyState compact title={copy.jobs.noItemTitle} description={copy.jobs.noItemDescription} />
       ) : (
         <div className="job-items-list">
           {job.items.map((item) => (
-            <JobItemRow item={item} key={item.id} />
+            <JobItemRow copy={copy} item={item} key={item.id} locale={locale} />
           ))}
         </div>
       )}
@@ -283,31 +285,31 @@ function JobDetail({ isRefreshing, job }: { isRefreshing: boolean; job: FetchJob
   );
 }
 
-function JobItemRow({ item }: { item: FetchJobItem }) {
+function JobItemRow({ copy, item, locale }: { copy: AppCopy; item: FetchJobItem; locale: Locale }) {
   return (
     <div className="job-item-row">
       <span>
         <Link to={`/symbols/${item.symbol}`}>{item.symbol}</Link>
         {item.errorMessage ? <small>{item.errorMessage}</small> : null}
       </span>
-      <JobStatusBadge status={item.status} />
-      <span>{item.finishedAt ? formatDateTime(item.finishedAt) : item.startedAt ? "Running" : "Waiting"}</span>
+      <JobStatusBadge copy={copy} status={item.status} />
+      <span>{item.finishedAt ? formatDateTime(item.finishedAt, locale) : item.startedAt ? formatJobStatus("running", copy) : copy.jobs.waiting}</span>
     </div>
   );
 }
 
-function ProgressMeter({ job }: { job: FetchJob }) {
+function ProgressMeter({ job, locale }: { job: FetchJob; locale: Locale }) {
   const progress = job.progressTotal > 0 ? Math.round((job.progressDone / job.progressTotal) * 100) : 0;
 
   return (
-    <span className="progress-meter" aria-label={`${progress}% complete`}>
+    <span className="progress-meter" aria-label={formatPercentComplete(progress, locale)}>
       <span style={{ width: `${progress}%` }} />
     </span>
   );
 }
 
-function JobStatusBadge({ status }: { status: FetchJobStatus | FetchJobItemStatus }) {
-  return <span className={`job-status-badge job-status-${status}`}>{jobStatusLabels[status]}</span>;
+function JobStatusBadge({ copy, status }: { copy: AppCopy; status: FetchJobStatus | FetchJobItemStatus }) {
+  return <span className={`job-status-badge job-status-${status}`}>{formatJobStatus(status, copy)}</span>;
 }
 
 function EmptyState({ compact = false, description, title }: { compact?: boolean; description: string; title: string }) {
@@ -319,20 +321,32 @@ function EmptyState({ compact = false, description, title }: { compact?: boolean
   );
 }
 
-function formatJobType(type: FetchJobType) {
-  return type.charAt(0).toUpperCase() + type.slice(1);
+function formatNoEnabledTickerMessage(jobType: RunnableJobType, copy: AppCopy, locale: Locale) {
+  const jobLabel = formatJobType(jobType, copy);
+  return locale === "zh"
+    ? `${copy.jobs.noEnabledTickerPrefix}${jobLabel}。`
+    : `${copy.jobs.noEnabledTickerPrefix} ${jobLabel.toLowerCase()} update.`;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short"
-  }).format(new Date(value));
+function formatQueuedUpdateMessage(jobType: RunnableJobType, count: number, copy: AppCopy, locale: Locale) {
+  const jobLabel = formatJobType(jobType, copy);
+  return locale === "zh"
+    ? `${copy.jobs.queuedUpdatePrefix}${jobLabel}更新任务：${count} 个标的。`
+    : `${copy.jobs.queuedUpdatePrefix} ${jobLabel.toLowerCase()} update for ${count} ticker${count === 1 ? "" : "s"}.`;
 }
 
-function formatErrorMessage(error: unknown) {
+function formatRetryUnavailableMessage(jobType: FetchJob["type"], copy: AppCopy, locale: Locale) {
+  const jobLabel = formatJobType(jobType, copy);
+  return locale === "zh"
+    ? `${copy.jobs.retryUnavailablePrefix}${jobLabel}${copy.jobs.retryUnavailableSuffix}`
+    : `${copy.jobs.retryUnavailablePrefix} ${jobLabel} ${copy.jobs.retryUnavailableSuffix}`;
+}
+
+function formatEnabledSymbolCount(count: number, copy: AppCopy, locale: Locale) {
+  return locale === "zh" ? `${count} ${copy.jobs.enabledSymbols}` : `${count} ${copy.jobs.enabledSymbols}`;
+}
+
+function formatErrorMessage(error: unknown, copy: AppCopy) {
   if (isApiError(error)) {
     return error.status === 0 ? error.message : `${error.message} (${error.status})`;
   }
@@ -341,7 +355,7 @@ function formatErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The request could not be completed.";
+  return copy.common.unknownRequestError;
 }
 
 function isActiveJob(job: FetchJob): boolean {

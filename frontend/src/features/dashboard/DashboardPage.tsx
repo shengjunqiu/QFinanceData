@@ -8,17 +8,20 @@ import type { DataStatus, DataType, FetchJob, FreshnessByType, SymbolQuote } fro
 import { ReturnChart } from "../../charts/ReturnChart";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
-  formatDashboardDataType,
-  formatDashboardDateTime,
-  formatDashboardSymbolCount,
-  formatDashboardUpdatedAt,
-  type DashboardCopy,
-  type DashboardLocale,
-  useDashboardLocale
-} from "../../i18n/dashboard";
+  formatCurrency,
+  formatDataType,
+  formatDateTime,
+  formatPercentComplete,
+  formatSymbolCount,
+  formatUpdatedAt,
+  type AppCopy,
+  type Locale,
+  useI18n
+} from "../../i18n";
 
 export function DashboardPage() {
-  const { copy, locale, setLocale } = useDashboardLocale();
+  const { copy, locale } = useI18n();
+  const t = copy.dashboard;
   const overviewQuery = useMarketOverviewQuery();
   const overview = overviewQuery.data;
   const trendSymbols = overview?.watchlist.slice(0, 5).map((quote) => quote.symbol) ?? [];
@@ -56,10 +59,7 @@ export function DashboardPage() {
   if (error) {
     return (
       <section className="page">
-        <div className="dashboard-utility-row">
-          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
-        </div>
-        <EmptyState title={copy.overviewUnavailable} description={formatErrorMessage(error)} />
+        <EmptyState title={t.overviewUnavailable} description={formatErrorMessage(error, copy)} />
       </section>
     );
   }
@@ -67,10 +67,7 @@ export function DashboardPage() {
   if (isLoading) {
     return (
       <section className="page">
-        <div className="dashboard-utility-row">
-          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
-        </div>
-        <EmptyState title={copy.loadingDashboard} description={copy.fetchingDashboard} />
+        <EmptyState title={t.loadingDashboard} description={t.fetchingDashboard} />
       </section>
     );
   }
@@ -79,37 +76,36 @@ export function DashboardPage() {
     <section className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">{copy.marketOverview}</p>
-          <h1>{copy.dashboard}</h1>
+          <p className="eyebrow">{t.marketOverview}</p>
+          <h1>{t.dashboard}</h1>
         </div>
         <div className="dashboard-header-actions">
-          <DashboardLanguageToggle copy={copy} locale={locale} onChange={setLocale} />
-          <span className="status-pill">{dashboard.lastUpdateAt ? formatDashboardUpdatedAt(dashboard.lastUpdateAt, locale) : copy.notUpdatedYet}</span>
+          <span className="status-pill">{dashboard.lastUpdateAt ? formatUpdatedAt(dashboard.lastUpdateAt, locale, copy) : t.notUpdatedYet}</span>
         </div>
       </div>
 
       {!hasWatchlist ? (
-        <EmptyState title={copy.noSymbolsTitle} description={copy.noSymbolsDescription} />
+        <EmptyState title={t.noSymbolsTitle} description={t.noSymbolsDescription} />
       ) : (
         <>
-          <section className="market-strip" aria-label={copy.marketSummaryLabel}>
+          <section className="market-strip" aria-label={t.marketSummaryLabel}>
             {dashboard.marketIndices.map((index) => (
-              <MarketTile key={index.symbol} quote={index} />
+              <MarketTile key={index.symbol} locale={locale} quote={index} />
             ))}
           </section>
 
           <div className="dashboard-grid">
             <section className="panel watchlist-panel">
               <div className="panel-heading">
-                <h2>{copy.watchlist}</h2>
-                <Link to="/watchlist">{copy.manage}</Link>
+                <h2>{copy.nav.watchlist}</h2>
+                <Link to="/watchlist">{t.manage}</Link>
               </div>
-              <div className="watchlist-table" role="table" aria-label={copy.watchlistOverviewLabel}>
+              <div className="watchlist-table" role="table" aria-label={t.watchlistOverviewLabel}>
                 <div className="watchlist-row watchlist-row-header" role="row">
-                  <span>{copy.symbol}</span>
-                  <span>{copy.last}</span>
-                  <span>{copy.change}</span>
-                  <span>{copy.status}</span>
+                  <span>{copy.common.symbol}</span>
+                  <span>{t.last}</span>
+                  <span>{copy.common.change}</span>
+                  <span>{copy.common.status}</span>
                 </div>
                 {dashboard.watchlist.slice(0, 8).map((quote) => (
                   <Link className="watchlist-row watchlist-row-link" key={quote.symbol} role="row" to={`/symbols/${quote.symbol}`}>
@@ -117,9 +113,9 @@ export function DashboardPage() {
                       <strong>{quote.symbol}</strong>
                       <small>{quote.name}</small>
                     </span>
-                    <span>{formatCurrency(quote.latestPrice, quote.currency)}</span>
+                    <span>{formatCurrency(quote.latestPrice, quote.currency, locale)}</span>
                     <ChangeValue value={quote.changePct} />
-                    <StatusBadge label={copy.statusLabels[quote.status]} status={quote.status} />
+                    <StatusBadge status={quote.status} />
                   </Link>
                 ))}
               </div>
@@ -127,47 +123,47 @@ export function DashboardPage() {
 
             <section className="panel panel-wide">
               <div className="panel-heading">
-                <h2>{copy.watchlistTrend}</h2>
-                <span>{copy.equalWeightReturn}</span>
+                <h2>{t.watchlistTrend}</h2>
+                <span>{t.equalWeightReturn}</span>
               </div>
               {hasTrendData ? (
-                <ReturnChart series={dashboard.trendSeries} />
+                <ReturnChart series={dashboard.trendSeries} seriesName={copy.symbolDetail.chartSeries.equalWeightReturn} />
               ) : (
-                <EmptyState title={copy.noTrendDataTitle} description={copy.noTrendDataDescription} compact />
+                <EmptyState title={t.noTrendDataTitle} description={t.noTrendDataDescription} compact />
               )}
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h2>{copy.topMovers}</h2>
+                <h2>{t.topMovers}</h2>
               </div>
               <div className="mover-columns">
-                <MoverList emptyDescription={copy.noMovers} title={copy.gainers} quotes={dashboard.topGainers} />
-                <MoverList emptyDescription={copy.noMovers} title={copy.losers} quotes={dashboard.topLosers} />
+                <MoverList emptyDescription={t.noMovers} title={t.gainers} quotes={dashboard.topGainers} />
+                <MoverList emptyDescription={t.noMovers} title={t.losers} quotes={dashboard.topLosers} />
               </div>
             </section>
 
             <section className="panel">
               <div className="panel-heading">
-                <h2>{copy.dataFreshness}</h2>
-                <Link to="/jobs">{copy.review}</Link>
+                <h2>{t.dataFreshness}</h2>
+                <Link to="/jobs">{t.review}</Link>
               </div>
               <div className="freshness-grid">
                 {Object.entries(dashboard.freshness).map(([status, count]) => (
                   <Link className="freshness-cell" key={status} to="/jobs">
-                    <StatusBadge label={copy.statusLabels[status as DataStatus]} status={status as DataStatus} />
+                    <StatusBadge status={status as DataStatus} />
                     <strong>{count}</strong>
                   </Link>
                 ))}
               </div>
-              <div className="freshness-type-list" aria-label="Data freshness by type">
+              <div className="freshness-type-list" aria-label={copy.common.dataFreshnessByType}>
                 {Object.entries(dashboard.freshnessByType).map(([dataType, counts]) => (
                   <div className="freshness-type-row" key={dataType}>
-                    <span>{formatDashboardDataType(dataType as DataType, copy)}</span>
+                    <span>{formatDataType(dataType as DataType, copy)}</span>
                     <div className="freshness-status-counts">
                       {(["failed", "partial", "stale", "missing", "fresh"] as DataStatus[]).map((status) => (
                         <small key={`${dataType}-${status}`}>
-                          {copy.statusLabels[status]}: {counts[status]}
+                          {copy.common.statusLabels[status]}: {counts[status]}
                         </small>
                       ))}
                     </div>
@@ -178,11 +174,11 @@ export function DashboardPage() {
 
             <section className="panel panel-full">
               <div className="panel-heading">
-                <h2>{copy.recentFetchJobs}</h2>
-                <Link to="/jobs">{copy.openJobs}</Link>
+                <h2>{t.recentFetchJobs}</h2>
+                <Link to="/jobs">{t.openJobs}</Link>
               </div>
               {dashboard.recentJobs.length === 0 ? (
-                <EmptyState title={copy.noFetchJobsTitle} description={copy.noFetchJobsDescription} compact />
+                <EmptyState title={t.noFetchJobsTitle} description={t.noFetchJobsDescription} compact />
               ) : (
                 <div className="jobs-list">
                   {dashboard.recentJobs.map((job) => (
@@ -198,45 +194,14 @@ export function DashboardPage() {
   );
 }
 
-function DashboardLanguageToggle({
-  copy,
-  locale,
-  onChange
-}: {
-  copy: DashboardCopy;
-  locale: DashboardLocale;
-  onChange: (locale: DashboardLocale) => void;
-}) {
-  return (
-    <div className="language-toggle" aria-label={copy.language}>
-      <button
-        aria-pressed={locale === "en"}
-        className={locale === "en" ? "language-toggle-button language-toggle-button-active" : "language-toggle-button"}
-        onClick={() => onChange("en")}
-        type="button"
-      >
-        EN
-      </button>
-      <button
-        aria-pressed={locale === "zh"}
-        className={locale === "zh" ? "language-toggle-button language-toggle-button-active" : "language-toggle-button"}
-        onClick={() => onChange("zh")}
-        type="button"
-      >
-        中文
-      </button>
-    </div>
-  );
-}
-
-function MarketTile({ quote }: { quote: SymbolQuote }) {
+function MarketTile({ locale, quote }: { locale: Locale; quote: SymbolQuote }) {
   return (
     <Link className="market-tile" to={`/symbols/${quote.symbol}`}>
       <span>
         <strong>{quote.symbol}</strong>
         <small>{quote.name}</small>
       </span>
-      <span>{formatCurrency(quote.latestPrice, quote.currency)}</span>
+      <span>{formatCurrency(quote.latestPrice, quote.currency, locale)}</span>
       <ChangeValue value={quote.changePct} />
     </Link>
   );
@@ -265,9 +230,9 @@ function RecentJobRow({
   job,
   locale
 }: {
-  copy: DashboardCopy;
+  copy: AppCopy;
   job: FetchJob;
-  locale: DashboardLocale;
+  locale: Locale;
 }) {
   const progress = job.progressTotal > 0 ? Math.round((job.progressDone / job.progressTotal) * 100) : 0;
   const displayStatus = getJobDisplayStatus(job);
@@ -275,12 +240,12 @@ function RecentJobRow({
   return (
     <Link className="job-row" to={`/jobs?job=${job.id}`}>
       <span>
-        <strong>{copy.jobTypeLabels[job.type]}</strong>
-        <small>{formatDashboardDateTime(job.createdAt, locale)}</small>
+        <strong>{copy.common.jobTypeLabels[job.type]}</strong>
+        <small>{formatDateTime(job.createdAt, locale)}</small>
       </span>
-      <span>{formatDashboardSymbolCount(job.symbols.length, locale)}</span>
-      <StatusBadge label={copy.statusLabels[displayStatus]} status={displayStatus} />
-      <span className="progress-meter" aria-label={locale === "zh" ? `完成 ${progress}%` : `${progress}% complete`}>
+      <span>{formatSymbolCount(job.symbols.length, locale)}</span>
+      <StatusBadge status={displayStatus} />
+      <span className="progress-meter" aria-label={formatPercentComplete(progress, locale)}>
         <span style={{ width: `${progress}%` }} />
       </span>
     </Link>
@@ -339,25 +304,7 @@ function emptyFreshnessByType(): FreshnessByType {
   };
 }
 
-function formatCurrency(value: number | null, currency: string) {
-  if (value === null) {
-    return "-";
-  }
-
-  if (!currency) {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: value > 1000 ? 0 : 2
-    }).format(value);
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    currency,
-    maximumFractionDigits: value > 1000 ? 0 : 2,
-    style: "currency"
-  }).format(value);
-}
-
-function formatErrorMessage(error: unknown) {
+function formatErrorMessage(error: unknown, copy: AppCopy) {
   if (isApiError(error)) {
     return error.status === 0 ? error.message : `${error.message} (${error.status})`;
   }
@@ -366,5 +313,5 @@ function formatErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The overview data could not be loaded.";
+  return copy.dashboard.overviewFallbackError;
 }

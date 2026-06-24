@@ -14,6 +14,19 @@ import { PriceChart } from "../../charts/PriceChart";
 import { VolumeChart } from "../../charts/VolumeChart";
 import { StatusBadge } from "../../components/StatusBadge";
 import { TimeRangeControl, type TimeRange } from "../../components/TimeRangeControl";
+import {
+  formatAssetType,
+  formatCompactCurrency,
+  formatCurrency,
+  formatDataType,
+  formatDateTime,
+  formatFieldLabel,
+  formatNumber,
+  formatPercent,
+  type AppCopy,
+  type Locale,
+  useI18n
+} from "../../i18n";
 
 const rangeMap: Record<TimeRange, string> = {
   "1D": "1d",
@@ -25,6 +38,8 @@ const rangeMap: Record<TimeRange, string> = {
 };
 
 export function SymbolDetailPage() {
+  const { copy, locale } = useI18n();
+  const t = copy.symbolDetail;
   const { symbol: symbolParam } = useParams();
   const symbol = decodeURIComponent(symbolParam ?? "").toUpperCase();
   const [range, setRange] = useState<TimeRange>("1Y");
@@ -45,7 +60,7 @@ export function SymbolDetailPage() {
       void queryClient.invalidateQueries({ queryKey: pricesQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: symbolsQueryKeys.all });
       void queryClient.invalidateQueries({ queryKey: marketQueryKeys.all });
-      setPageMessage(`Queued price refresh for ${symbol}.`);
+      setPageMessage(`${t.queuedPriceRefresh} ${symbol}.`);
     }
   });
 
@@ -65,7 +80,7 @@ export function SymbolDetailPage() {
   if (symbolsQuery.isLoading) {
     return (
       <section className="page">
-        <EmptyState title="Loading symbol" description="Fetching symbol profile and local price data." />
+        <EmptyState title={t.loadingSymbol} description={t.loadingSymbolDescription} />
       </section>
     );
   }
@@ -73,7 +88,7 @@ export function SymbolDetailPage() {
   if (symbolsQuery.error) {
     return (
       <section className="page">
-        <EmptyState title="Symbol unavailable" description={formatErrorMessage(symbolsQuery.error)} />
+        <EmptyState title={t.symbolUnavailable} description={formatErrorMessage(symbolsQuery.error, copy)} />
       </section>
     );
   }
@@ -82,9 +97,9 @@ export function SymbolDetailPage() {
     return (
       <section className="page">
         <div className="detail-empty">
-          <h1>Symbol not found</h1>
-          <p>The ticker is not in the watchlist yet.</p>
-          <Link to="/watchlist">Open Watchlist</Link>
+          <h1>{t.symbolNotFound}</h1>
+          <p>{t.symbolNotFoundDescription}</p>
+          <Link to="/watchlist">{t.openWatchlist}</Link>
         </div>
       </section>
     );
@@ -100,7 +115,7 @@ export function SymbolDetailPage() {
 
   async function exportCurrentPrices() {
     if (bars.length === 0) {
-      setPageMessage("No price data is available for the selected range.");
+      setPageMessage(t.noPriceDataForRange);
       return;
     }
 
@@ -110,9 +125,9 @@ export function SymbolDetailPage() {
         interval: "1d",
         range: rangeMap[range]
       });
-      setPageMessage(`Exported ${detailSymbol} price data.`);
+      setPageMessage(`${detailSymbol} ${t.exportedPriceData}`);
     } catch (error) {
-      setPageMessage(formatErrorMessage(error));
+      setPageMessage(formatErrorMessage(error, copy));
     } finally {
       setIsExporting(false);
     }
@@ -122,50 +137,52 @@ export function SymbolDetailPage() {
     <section className="page symbol-detail-page">
       <header className="symbol-hero">
         <div>
-          <p className="eyebrow">{detailQuote.exchange || "Unknown exchange"} · {detailQuote.assetType}</p>
-          <h1>{detailQuote.symbol} <span>{detailQuote.name || "Unnamed symbol"}</span></h1>
+          <p className="eyebrow">{detailQuote.exchange || t.unknownExchange} · {formatAssetType(detailQuote.assetType, copy)}</p>
+          <h1>{detailQuote.symbol} <span>{detailQuote.name || t.unnamedSymbol}</span></h1>
           <div className="symbol-price-line">
-            <strong>{formatCurrency(detailQuote.latestPrice, detailQuote.currency)}</strong>
+            <strong>{formatCurrency(detailQuote.latestPrice, detailQuote.currency, locale)}</strong>
             <ChangeValue value={detailQuote.changePct} />
-            <span>{latestPriceQuery.isLoading ? "Loading latest price" : `Updated ${detailQuote.lastUpdate ? formatDateTime(detailQuote.lastUpdate) : "never"}`}</span>
+            <span>{latestPriceQuery.isLoading ? t.loadingLatestPrice : `${copy.common.updated} ${detailQuote.lastUpdate ? formatDateTime(detailQuote.lastUpdate, locale) : copy.common.never}`}</span>
           </div>
-          {latestPriceQuery.error ? <p className="inline-message inline-message-error">{formatErrorMessage(latestPriceQuery.error)}</p> : null}
+          {latestPriceQuery.error ? <p className="inline-message inline-message-error">{formatErrorMessage(latestPriceQuery.error, copy)}</p> : null}
         </div>
         <div className="symbol-actions">
           <button disabled={refreshMutation.isPending} onClick={() => refreshMutation.mutate()} type="button">
-            {refreshMutation.isPending ? "Refreshing" : "Refresh"}
+            {refreshMutation.isPending ? copy.common.refreshing : copy.common.refresh}
           </button>
           <button disabled={isExporting} onClick={() => void exportCurrentPrices()} type="button">
-            {isExporting ? "Exporting" : "Export"}
+            {isExporting ? copy.common.exporting : t.exportPriceData}
           </button>
         </div>
       </header>
-      {refreshMutation.error ? <p className="inline-message inline-message-error">{formatErrorMessage(refreshMutation.error)}</p> : null}
+      {refreshMutation.error ? <p className="inline-message inline-message-error">{formatErrorMessage(refreshMutation.error, copy)}</p> : null}
       {pageMessage ? <p className="inline-message">{pageMessage}</p> : null}
 
       <div className="symbol-detail-grid">
         <section className="panel chart-panel panel-full">
           <div className="panel-heading">
-            <h2>Price Chart</h2>
+            <h2>{t.priceChart}</h2>
             <TimeRangeControl value={range} onChange={setRange} />
           </div>
           <PricePanelContent
             barsLength={bars.length}
+            copy={copy}
             error={priceError}
             isLoading={priceSeriesQuery.isLoading}
             onRefresh={() => refreshMutation.mutate()}
           >
-            <PriceChart bars={bars} />
+            <PriceChart bars={bars} seriesLabels={t.chartSeries} />
           </PricePanelContent>
         </section>
 
         <section className="panel chart-panel panel-full">
           <div className="panel-heading">
-            <h2>Volume</h2>
+            <h2>{t.volume}</h2>
             <span>{range}</span>
           </div>
           <PricePanelContent
             barsLength={bars.length}
+            copy={copy}
             error={priceError}
             isLoading={priceSeriesQuery.isLoading}
             onRefresh={() => refreshMutation.mutate()}
@@ -176,58 +193,58 @@ export function SymbolDetailPage() {
 
         <section className="panel">
           <div className="panel-heading">
-            <h2>Key Metrics</h2>
+            <h2>{t.keyMetrics}</h2>
             <StatusBadge status={fundamentalsQuery.error ? "failed" : fundamentals?.status ?? "missing"} />
           </div>
           {fundamentalsQuery.isLoading ? (
-            <EmptyState compact title="Loading metrics" description="Fetching local fundamentals snapshot." />
+            <EmptyState compact title={t.loadingMetrics} description={t.loadingMetricsDescription} />
           ) : fundamentalsQuery.error ? (
-            <EmptyState compact title="Metrics unavailable" description={formatErrorMessage(fundamentalsQuery.error)} />
+            <EmptyState compact title={t.metricsUnavailable} description={formatErrorMessage(fundamentalsQuery.error, copy)} />
           ) : (
-            <MetricGrid items={buildMetricItems(fundamentals, fundamentalsCurrency)} />
+            <MetricGrid items={buildMetricItems(fundamentals, fundamentalsCurrency, copy, locale)} />
           )}
         </section>
 
         <section className="panel">
           <div className="panel-heading">
-            <h2>Financial Summary</h2>
-            <span>{fundamentals?.lastFetchAt ? formatDateTime(fundamentals.lastFetchAt) : "Not fetched"}</span>
+            <h2>{t.financialSummary}</h2>
+            <span>{fundamentals?.lastFetchAt ? formatDateTime(fundamentals.lastFetchAt, locale) : t.notFetched}</span>
           </div>
           {fundamentalsQuery.isLoading ? (
-            <EmptyState compact title="Loading summary" description="Fetching latest financial statement facts." />
+            <EmptyState compact title={t.loadingSummary} description={t.loadingSummaryDescription} />
           ) : fundamentalsQuery.error ? (
-            <EmptyState compact title="Summary unavailable" description={formatErrorMessage(fundamentalsQuery.error)} />
+            <EmptyState compact title={t.summaryUnavailable} description={formatErrorMessage(fundamentalsQuery.error, copy)} />
           ) : (
             <>
-              <MetricGrid items={buildFinancialItems(fundamentals, fundamentalsCurrency)} />
-              <MissingFieldsNotice fields={fundamentals?.missingFields ?? []} />
+              <MetricGrid items={buildFinancialItems(fundamentals, fundamentalsCurrency, copy, locale)} />
+              <MissingFieldsNotice copy={copy} fields={fundamentals?.missingFields ?? []} />
             </>
           )}
         </section>
 
         <section className="panel">
           <div className="panel-heading">
-            <h2>Corporate Actions</h2>
-            <span>{actionsQuery.isLoading ? "Loading" : `${actions.length} events`}</span>
+            <h2>{t.corporateActions}</h2>
+            <span>{actionsQuery.isLoading ? copy.common.loading : formatEventCount(actions.length, copy, locale)}</span>
           </div>
           {actionsQuery.isLoading ? (
-            <EmptyState compact title="Loading events" description="Fetching dividends and split history." />
+            <EmptyState compact title={t.loadingEvents} description={t.loadingEventsDescription} />
           ) : actionsQuery.error ? (
-            <EmptyState compact title="Events unavailable" description={formatErrorMessage(actionsQuery.error)} />
+            <EmptyState compact title={t.eventsUnavailable} description={formatErrorMessage(actionsQuery.error, copy)} />
           ) : (
-            <CorporateActionList actions={actions} currency={fundamentalsCurrency} />
+            <CorporateActionList actions={actions} copy={copy} currency={fundamentalsCurrency} locale={locale} />
           )}
         </section>
 
         <section className="panel">
           <div className="panel-heading">
-            <h2>Data Status</h2>
-            <Link to="/jobs">Open Jobs</Link>
+            <h2>{t.dataStatus}</h2>
+            <Link to="/jobs">{copy.dashboard.openJobs}</Link>
           </div>
           {dataStatusQuery.error ? (
-            <EmptyState compact title="Status unavailable" description={formatErrorMessage(dataStatusQuery.error)} />
+            <EmptyState compact title={t.statusUnavailable} description={formatErrorMessage(dataStatusQuery.error, copy)} />
           ) : (
-            <DataStatusList quote={detailQuote} statuses={statuses} />
+            <DataStatusList copy={copy} quote={detailQuote} statuses={statuses} />
           )}
         </section>
       </div>
@@ -238,30 +255,32 @@ export function SymbolDetailPage() {
 function PricePanelContent({
   barsLength,
   children,
+  copy,
   error,
   isLoading,
   onRefresh
 }: {
   barsLength: number;
   children: ReactNode;
+  copy: AppCopy;
   error: unknown;
   isLoading: boolean;
   onRefresh: () => void;
 }) {
   if (isLoading) {
-    return <EmptyState title="Loading price data" description="Fetching local price bars for this range." />;
+    return <EmptyState title={copy.symbolDetail.loadingPriceData} description={copy.symbolDetail.loadingPriceDataDescription} />;
   }
 
   if (error) {
-    return <EmptyState title="Price data unavailable" description={formatErrorMessage(error)} />;
+    return <EmptyState title={copy.symbolDetail.priceDataUnavailable} description={formatErrorMessage(error, copy)} />;
   }
 
   if (barsLength === 0) {
     return (
       <div className="empty-state">
-        <strong>No price data</strong>
-        <p>Run a price update to populate this chart.</p>
-        <button className="primary-action" onClick={onRefresh} type="button">Update Prices</button>
+        <strong>{copy.symbolDetail.noPriceData}</strong>
+        <p>{copy.symbolDetail.noPriceDataDescription}</p>
+        <button className="primary-action" onClick={onRefresh} type="button">{copy.common.updatePrices}</button>
       </div>
     );
   }
@@ -282,9 +301,9 @@ function MetricGrid({ items }: { items: Array<{ label: string; value: string }> 
   );
 }
 
-function CorporateActionList({ actions, currency }: { actions: CorporateAction[]; currency: string }) {
+function CorporateActionList({ actions, copy, currency, locale }: { actions: CorporateAction[]; copy: AppCopy; currency: string; locale: Locale }) {
   if (actions.length === 0) {
-    return <EmptyState compact title="No events" description="No dividends or splits are available in local data for this symbol." />;
+    return <EmptyState compact title={copy.symbolDetail.noEvents} description={copy.symbolDetail.noEventsDescription} />;
   }
 
   return (
@@ -292,29 +311,29 @@ function CorporateActionList({ actions, currency }: { actions: CorporateAction[]
       {actions.map((action) => (
         <div className="action-row" key={`${action.symbol}-${action.actionType}-${action.exDate}`}>
           <span>
-            <strong>{action.actionType === "dividend" ? "Dividend" : "Split"}</strong>
+            <strong>{action.actionType === "dividend" ? copy.symbolDetail.dividend : copy.symbolDetail.split}</strong>
             <small>{action.exDate}</small>
           </span>
-          <span>{action.actionType === "dividend" ? formatCurrency(action.value, currency) : `${action.value}:1`}</span>
+          <span>{action.actionType === "dividend" ? formatCurrency(action.value, currency, locale) : `${action.value}:1`}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function MissingFieldsNotice({ fields }: { fields: string[] }) {
+function MissingFieldsNotice({ copy, fields }: { copy: AppCopy; fields: string[] }) {
   if (fields.length === 0) {
     return null;
   }
 
   return (
     <p className="panel-note">
-      Missing fields: {fields.map(formatFieldLabel).join(", ")}
+      {copy.symbolDetail.missingFields}: {fields.map((field) => formatFieldLabel(field, copy)).join(", ")}
     </p>
   );
 }
 
-function DataStatusList({ quote, statuses }: { quote: SymbolQuote; statuses: DataStatusRecord[] }) {
+function DataStatusList({ copy, quote, statuses }: { copy: AppCopy; quote: SymbolQuote; statuses: DataStatusRecord[] }) {
   const fallbackStatuses: DataStatusRecord[] =
     statuses.length > 0
       ? statuses
@@ -326,7 +345,7 @@ function DataStatusList({ quote, statuses }: { quote: SymbolQuote; statuses: Dat
             lastDataAt: quote.lastUpdate,
             lastFetchAt: null,
             lastSuccessAt: null,
-            lastError: quote.status === "failed" ? "Latest price update failed" : null
+            lastError: quote.status === "failed" ? copy.symbolDetail.latestPriceUpdateFailed : null
           }
         ];
 
@@ -335,8 +354,8 @@ function DataStatusList({ quote, statuses }: { quote: SymbolQuote; statuses: Dat
       {fallbackStatuses.map((status) => (
         <div className="data-status-row" key={`${status.symbol}-${status.dataType}`}>
           <span>
-            <strong>{status.dataType}</strong>
-            <small>{status.lastDataAt ? `Data through ${status.lastDataAt}` : "No local data"}</small>
+            <strong>{formatDataType(status.dataType, copy)}</strong>
+            <small>{status.lastDataAt ? `${copy.symbolDetail.dataThrough} ${status.lastDataAt}` : copy.symbolDetail.noLocalData}</small>
           </span>
           <StatusBadge status={status.status} />
         </div>
@@ -345,23 +364,23 @@ function DataStatusList({ quote, statuses }: { quote: SymbolQuote; statuses: Dat
   );
 }
 
-function buildMetricItems(fundamentals: FundamentalSnapshot | undefined, currency: string) {
+function buildMetricItems(fundamentals: FundamentalSnapshot | undefined, currency: string, copy: AppCopy, locale: Locale) {
   return [
-    { label: "Market Cap", value: formatCompactCurrency(fundamentals?.metrics.marketCap ?? null, currency) },
-    { label: "Trailing PE", value: formatNumber(fundamentals?.metrics.trailingPe ?? null) },
-    { label: "Price / Book", value: formatNumber(fundamentals?.metrics.priceToBook ?? null) },
-    { label: "Dividend Yield", value: formatPercent(fundamentals?.metrics.dividendYield ?? null) },
-    { label: "52W High", value: formatCurrency(fundamentals?.metrics.fiftyTwoWeekHigh ?? null, currency) },
-    { label: "52W Low", value: formatCurrency(fundamentals?.metrics.fiftyTwoWeekLow ?? null, currency) }
+    { label: copy.symbolDetail.metricLabels.marketCap, value: formatCompactCurrency(fundamentals?.metrics.marketCap ?? null, currency, locale) },
+    { label: copy.symbolDetail.metricLabels.trailingPe, value: formatNumber(fundamentals?.metrics.trailingPe ?? null, locale) },
+    { label: copy.symbolDetail.metricLabels.priceToBook, value: formatNumber(fundamentals?.metrics.priceToBook ?? null, locale) },
+    { label: copy.symbolDetail.metricLabels.dividendYield, value: formatPercent(fundamentals?.metrics.dividendYield ?? null, locale) },
+    { label: copy.symbolDetail.metricLabels.fiftyTwoWeekHigh, value: formatCurrency(fundamentals?.metrics.fiftyTwoWeekHigh ?? null, currency, locale) },
+    { label: copy.symbolDetail.metricLabels.fiftyTwoWeekLow, value: formatCurrency(fundamentals?.metrics.fiftyTwoWeekLow ?? null, currency, locale) }
   ];
 }
 
-function buildFinancialItems(fundamentals: FundamentalSnapshot | undefined, currency: string) {
+function buildFinancialItems(fundamentals: FundamentalSnapshot | undefined, currency: string, copy: AppCopy, locale: Locale) {
   return [
-    { label: "Revenue", value: formatCompactCurrency(fundamentals?.financialSummary.revenue ?? null, currency) },
-    { label: "Net Income", value: formatCompactCurrency(fundamentals?.financialSummary.netIncome ?? null, currency) },
-    { label: "Free Cash Flow", value: formatCompactCurrency(fundamentals?.financialSummary.freeCashFlow ?? null, currency) },
-    { label: "Debt Ratio", value: formatPercent(fundamentals?.financialSummary.debtRatio ?? null) }
+    { label: copy.symbolDetail.metricLabels.revenue, value: formatCompactCurrency(fundamentals?.financialSummary.revenue ?? null, currency, locale) },
+    { label: copy.symbolDetail.metricLabels.netIncome, value: formatCompactCurrency(fundamentals?.financialSummary.netIncome ?? null, currency, locale) },
+    { label: copy.symbolDetail.metricLabels.freeCashFlow, value: formatCompactCurrency(fundamentals?.financialSummary.freeCashFlow ?? null, currency, locale) },
+    { label: copy.symbolDetail.metricLabels.debtRatio, value: formatPercent(fundamentals?.financialSummary.debtRatio ?? null, locale) }
   ];
 }
 
@@ -385,80 +404,11 @@ function EmptyState({ compact = false, description, title }: { compact?: boolean
   );
 }
 
-function formatCurrency(value: number | null, currency: string) {
-  if (value === null) {
-    return "-";
-  }
-
-  if (!currency) {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: value > 1000 ? 0 : 2
-    }).format(value);
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    currency,
-    maximumFractionDigits: value > 1000 ? 0 : 2,
-    style: "currency"
-  }).format(value);
+function formatEventCount(value: number, copy: AppCopy, locale: Locale) {
+  return locale === "zh" ? `${value} ${copy.symbolDetail.events}` : `${value} event${value === 1 ? "" : "s"}`;
 }
 
-function formatCompactCurrency(value: number | null, currency: string) {
-  if (value === null) {
-    return "-";
-  }
-
-  if (!currency) {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: 2,
-      notation: "compact"
-    }).format(value);
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    currency,
-    maximumFractionDigits: 2,
-    notation: "compact",
-    style: "currency"
-  }).format(value);
-}
-
-function formatNumber(value: number | null) {
-  if (value === null) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
-}
-
-function formatPercent(value: number | null) {
-  if (value === null) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 2,
-    style: "percent"
-  }).format(value);
-}
-
-function formatFieldLabel(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short"
-  }).format(new Date(value));
-}
-
-function formatErrorMessage(error: unknown) {
+function formatErrorMessage(error: unknown, copy: AppCopy) {
   if (isApiError(error)) {
     return error.status === 0 ? error.message : `${error.message} (${error.status})`;
   }
@@ -467,5 +417,5 @@ function formatErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The request could not be completed.";
+  return copy.common.unknownRequestError;
 }

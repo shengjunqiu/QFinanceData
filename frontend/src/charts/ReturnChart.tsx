@@ -10,9 +10,10 @@ echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 type ReturnChartProps = {
   series: PriceBar[][];
+  seriesName?: string;
 };
 
-export function ReturnChart({ series }: ReturnChartProps) {
+export function ReturnChart({ series, seriesName = "Equal weight return" }: ReturnChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const normalizedSeries = useMemo(() => buildEqualWeightReturnSeries(series), [series]);
 
@@ -49,7 +50,7 @@ export function ReturnChart({ series }: ReturnChartProps) {
       },
       series: [
         {
-          name: "Equal weight return",
+          name: seriesName,
           type: "line",
           data: normalizedSeries.map((point) => point.returnPct),
           showSymbol: false,
@@ -71,7 +72,7 @@ export function ReturnChart({ series }: ReturnChartProps) {
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [normalizedSeries]);
+  }, [normalizedSeries, seriesName]);
 
   return <div className="return-chart" ref={chartRef} />;
 }

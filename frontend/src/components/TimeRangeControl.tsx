@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { useOptionalI18n } from "../i18n";
+
 export const timeRanges = ["1D", "1M", "3M", "1Y", "5Y", "MAX"] as const;
 
 export type TimeRange = (typeof timeRanges)[number];
@@ -12,6 +14,7 @@ type TimeRangeControlProps = {
 
 export function TimeRangeControl({ defaultValue = "1Y", onChange, value }: TimeRangeControlProps) {
   const [internalRange, setInternalRange] = useState<TimeRange>(defaultValue);
+  const i18n = useOptionalI18n();
   const selectedRange = value ?? internalRange;
 
   function selectRange(range: TimeRange) {
@@ -23,7 +26,7 @@ export function TimeRangeControl({ defaultValue = "1Y", onChange, value }: TimeR
   }
 
   return (
-    <div className="range-control" aria-label="Time range">
+    <div className="range-control" aria-label={i18n?.copy.common.timeRange ?? "Time range"}>
       {timeRanges.map((range) => (
         <button
           aria-pressed={selectedRange === range}

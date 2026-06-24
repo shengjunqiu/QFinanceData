@@ -1,4 +1,5 @@
 import type { DataStatus } from "../api/types";
+import { useOptionalI18n } from "../i18n";
 
 export const dataStatusLabels: Record<DataStatus, string> = {
   fresh: "Fresh",
@@ -14,5 +15,7 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ label, status }: StatusBadgeProps) {
-  return <span className={`status-badge status-${status}`}>{label ?? dataStatusLabels[status]}</span>;
+  const i18n = useOptionalI18n();
+
+  return <span className={`status-badge status-${status}`}>{label ?? i18n?.copy.common.statusLabels[status] ?? dataStatusLabels[status]}</span>;
 }

@@ -10,9 +10,18 @@ echarts.use([CandlestickChart, DataZoomComponent, GridComponent, LegendComponent
 
 type PriceChartProps = {
   bars: PriceBar[];
+  seriesLabels?: {
+    adjClose: string;
+    ohlc: string;
+  };
 };
 
-export function PriceChart({ bars }: PriceChartProps) {
+const defaultSeriesLabels = {
+  adjClose: "Adj Close",
+  ohlc: "OHLC"
+};
+
+export function PriceChart({ bars, seriesLabels = defaultSeriesLabels }: PriceChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
   const chartData = useMemo(
     () => ({
@@ -71,7 +80,7 @@ export function PriceChart({ bars }: PriceChartProps) {
       },
       series: [
         {
-          name: "OHLC",
+          name: seriesLabels.ohlc,
           type: "candlestick",
           data: chartData.candles,
           itemStyle: {
@@ -82,7 +91,7 @@ export function PriceChart({ bars }: PriceChartProps) {
           }
         },
         {
-          name: "Adj Close",
+          name: seriesLabels.adjClose,
           type: "line",
           data: chartData.adjClose,
           showSymbol: false,
@@ -102,7 +111,7 @@ export function PriceChart({ bars }: PriceChartProps) {
       resizeObserver.disconnect();
       chart.dispose();
     };
-  }, [chartData]);
+  }, [chartData, seriesLabels]);
 
   return <div className="price-chart" ref={chartRef} />;
 }

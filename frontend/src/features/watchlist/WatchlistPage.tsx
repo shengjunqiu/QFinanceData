@@ -12,8 +12,11 @@ import {
 } from "../../api/symbols";
 import type { SymbolQuote } from "../../api/types";
 import { StatusBadge } from "../../components/StatusBadge";
+import { formatAssetType, formatDateTime, type AppCopy, type Locale, useI18n } from "../../i18n";
 
 export function WatchlistPage() {
+  const { copy, locale } = useI18n();
+  const t = copy.watchlist;
   const [selectedGroup, setSelectedGroup] = useState("All");
   const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
   const [tickerInput, setTickerInput] = useState("");
@@ -51,12 +54,12 @@ export function WatchlistPage() {
     const ticker = tickerInput.trim().toUpperCase();
 
     if (!ticker) {
-      setMessage("Enter a ticker before adding it.");
+      setMessage(t.enterTicker);
       return;
     }
 
     if (symbols.some((symbol) => symbol.symbol === ticker)) {
-      setMessage(`${ticker} is already in the watchlist.`);
+      setMessage(`${ticker} ${t.alreadyInWatchlist}`);
       return;
     }
 
@@ -67,9 +70,9 @@ export function WatchlistPage() {
       });
       setSelectedSymbols((current) => new Set(current).add(created.symbol));
       setTickerInput("");
-      setMessage(`${created.symbol} added. Run an update to fetch price data.`);
+      setMessage(`${created.symbol} ${t.tickerAddedSuffix}`);
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
@@ -109,16 +112,16 @@ export function WatchlistPage() {
         next.delete(symbol);
         return next;
       });
-      setMessage(`${symbol} removed from Watchlist. Historical data is not deleted.`);
+      setMessage(`${symbol} ${t.removedSuffix}`);
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
   async function updateGroup(symbol: string, groupName: string) {
     const nextGroup = groupName.trim();
     if (!nextGroup) {
-      setMessage("Group name cannot be empty.");
+      setMessage(t.groupNameEmpty);
       return;
     }
 
@@ -129,9 +132,9 @@ export function WatchlistPage() {
           groupName: nextGroup
         }
       });
-      setMessage(`${symbol} moved to ${nextGroup}.`);
+      setMessage(`${symbol} ${t.movedTo} ${nextGroup}.`);
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
@@ -143,15 +146,15 @@ export function WatchlistPage() {
           enabled: !(symbol.enabled ?? true)
         }
       });
-      setMessage(`${symbol.symbol} ${symbol.enabled ?? true ? "disabled" : "enabled"}.`);
+      setMessage(`${symbol.symbol} ${symbol.enabled ?? true ? t.disabledMessage : t.enabledMessage}`);
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
   async function updateSelectedSymbols() {
     if (selectedSymbols.size === 0) {
-      setMessage("Select at least one ticker before starting an update.");
+      setMessage(t.selectAtLeastOne);
       return;
     }
 
@@ -160,15 +163,15 @@ export function WatchlistPage() {
         interval: "1d",
         symbols: Array.from(selectedSymbols)
       });
-      setMessage(`Queued price update for ${selectedSymbols.size} selected ticker${selectedSymbols.size > 1 ? "s" : ""}.`);
+      setMessage(formatQueuedPriceMessage(selectedSymbols.size, copy, locale));
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     }
   }
 
   async function exportVisibleSymbols() {
     if (visibleSymbols.length === 0) {
-      setMessage("No symbols are available to export for the current view.");
+      setMessage(t.exportEmpty);
       return;
     }
 
@@ -178,9 +181,9 @@ export function WatchlistPage() {
         includeDisabled: true,
         groupName: selectedGroup === "All" ? undefined : selectedGroup
       });
-      setMessage(`Exported ${visibleSymbols.length} symbol${visibleSymbols.length > 1 ? "s" : ""}.`);
+      setMessage(formatExportedMessage(visibleSymbols.length, copy, locale));
     } catch (error) {
-      setMessage(formatErrorMessage(error));
+      setMessage(formatErrorMessage(error, copy));
     } finally {
       setIsExporting(false);
     }
@@ -189,7 +192,7 @@ export function WatchlistPage() {
   if (symbolsQuery.isLoading) {
     return (
       <section className="page">
-        <EmptyState title="Loading watchlist" description="Fetching symbols from the local data store." />
+        <EmptyState title={t.loadingTitle} description={t.fetchingSymbols} />
       </section>
     );
   }
@@ -197,7 +200,7 @@ export function WatchlistPage() {
   if (symbolsQuery.error) {
     return (
       <section className="page">
-        <EmptyState title="Watchlist unavailable" description={formatErrorMessage(symbolsQuery.error)} />
+        <EmptyState title={t.unavailableTitle} description={formatErrorMessage(symbolsQuery.error, copy)} />
       </section>
     );
   }
@@ -206,37 +209,37 @@ export function WatchlistPage() {
     <section className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Symbol Management</p>
-          <h1>Watchlist</h1>
+          <p className="eyebrow">{t.headerEyebrow}</p>
+          <h1>{t.title}</h1>
         </div>
         <div className="page-actions">
           <button disabled={isMutating} onClick={() => void exportVisibleSymbols()} type="button">
-            {isExporting ? "Exporting" : "Export CSV"}
+            {isExporting ? copy.common.exporting : copy.common.exportCsv}
           </button>
           <button className="primary-action" disabled={isMutating} onClick={() => void updateSelectedSymbols()} type="button">
-            {createPriceFetchJobMutation.isPending ? "Queueing" : "Update Selected"}
+            {createPriceFetchJobMutation.isPending ? t.queueing : t.updateSelected}
           </button>
         </div>
       </div>
 
-      <section className="watchlist-toolbar" aria-label="Watchlist controls">
+      <section className="watchlist-toolbar" aria-label={t.watchlistControls}>
         <form className="add-symbol-form" onSubmit={(event) => void handleAddSymbol(event)}>
           <label className="visually-hidden" htmlFor="watchlist-ticker">
-            Add ticker
+            {t.addTicker}
           </label>
           <input
             autoComplete="off"
             id="watchlist-ticker"
             onChange={(event) => setTickerInput(event.target.value)}
-            placeholder="Add ticker..."
+            placeholder={t.addTickerPlaceholder}
             value={tickerInput}
           />
           <button disabled={createSymbolMutation.isPending} type="submit">
-            {createSymbolMutation.isPending ? "Adding" : "Add"}
+            {createSymbolMutation.isPending ? copy.common.adding : copy.common.add}
           </button>
         </form>
 
-        <div className="group-tabs" aria-label="Watchlist groups">
+        <div className="group-tabs" aria-label={t.watchlistGroups}>
           {groups.map((group) => (
             <button
               aria-pressed={selectedGroup === group}
@@ -245,41 +248,41 @@ export function WatchlistPage() {
               onClick={() => setSelectedGroup(group)}
               type="button"
             >
-              {group}
+              {formatGroupName(group, copy)}
             </button>
           ))}
         </div>
       </section>
 
       {message ? <p className="inline-message">{message}</p> : null}
-      {mutationError ? <p className="inline-message inline-message-error">{formatErrorMessage(mutationError)}</p> : null}
+      {mutationError ? <p className="inline-message inline-message-error">{formatErrorMessage(mutationError, copy)}</p> : null}
 
       <section className="panel watchlist-management-panel">
         <div className="panel-heading">
-          <h2>{selectedGroup} Symbols</h2>
-          <span>{visibleSymbols.length} shown · {selectedSymbols.size} selected</span>
+          <h2>{formatGroupTitle(selectedGroup, copy)}</h2>
+          <span>{formatSelectionSummary(visibleSymbols.length, selectedSymbols.size, copy, locale)}</span>
         </div>
 
         {visibleSymbols.length === 0 ? (
-          <EmptyState title="No symbols in this group" description="Add a ticker or switch to another group." />
+          <EmptyState title={t.emptyGroupTitle} description={t.emptyGroupDescription} />
         ) : (
-          <div className="watchlist-management-table" role="table" aria-label="Watchlist management">
+          <div className="watchlist-management-table" role="table" aria-label={t.managementLabel}>
             <div className="watchlist-management-row watchlist-management-header" role="row">
               <span>
                 <input
-                  aria-label="Select visible symbols"
+                  aria-label={t.selectVisibleSymbols}
                   checked={allVisibleSelected}
                   onChange={toggleVisibleSymbols}
                   type="checkbox"
                 />
               </span>
-              <span>Symbol</span>
-              <span>Type</span>
-              <span>Currency</span>
-              <span>Group</span>
-              <span>Enabled</span>
-              <span>Last Update</span>
-              <span>Status</span>
+              <span>{copy.common.symbol}</span>
+              <span>{copy.common.type}</span>
+              <span>{copy.common.currency}</span>
+              <span>{copy.common.group}</span>
+              <span>{copy.common.enabled}</span>
+              <span>{copy.common.lastUpdate}</span>
+              <span>{copy.common.status}</span>
               <span />
             </div>
 
@@ -287,7 +290,7 @@ export function WatchlistPage() {
               <div className="watchlist-management-row" key={symbol.symbol} role="row">
                 <span>
                   <input
-                    aria-label={`Select ${symbol.symbol}`}
+                    aria-label={`${copy.common.select} ${symbol.symbol}`}
                     checked={selectedSymbols.has(symbol.symbol)}
                     onChange={() => toggleSymbol(symbol.symbol)}
                     type="checkbox"
@@ -296,14 +299,14 @@ export function WatchlistPage() {
                 <span>
                   <Link className="symbol-link" to={`/symbols/${symbol.symbol}`}>
                     <strong>{symbol.symbol}</strong>
-                    <small>{symbol.name || "Pending metadata"}</small>
+                    <small>{symbol.name || t.pendingMetadata}</small>
                   </Link>
                 </span>
-                <span>{formatAssetType(symbol.assetType)}</span>
+                <span>{formatAssetType(symbol.assetType, copy)}</span>
                 <span>{symbol.currency || "-"}</span>
                 <span>
                   <input
-                    aria-label={`Group for ${symbol.symbol}`}
+                    aria-label={`${copy.common.group} ${symbol.symbol}`}
                     className="table-input"
                     defaultValue={symbol.groupName}
                     disabled={updateSymbolMutation.isPending}
@@ -317,14 +320,14 @@ export function WatchlistPage() {
                 </span>
                 <span>
                   <input
-                    aria-label={`Enabled ${symbol.symbol}`}
+                    aria-label={`${copy.common.enabled} ${symbol.symbol}`}
                     checked={symbol.enabled ?? true}
                     disabled={updateSymbolMutation.isPending}
                     onChange={() => void toggleEnabled(symbol)}
                     type="checkbox"
                   />
                 </span>
-                <span>{symbol.lastUpdate ?? "Never"}</span>
+                <span>{symbol.lastUpdate ? formatDateTime(symbol.lastUpdate, locale) : copy.common.never}</span>
                 <span>
                   <StatusBadge status={symbol.status} />
                 </span>
@@ -335,7 +338,7 @@ export function WatchlistPage() {
                     onClick={() => void removeSymbol(symbol.symbol)}
                     type="button"
                   >
-                    Remove
+                    {copy.common.remove}
                   </button>
                 </span>
               </div>
@@ -347,10 +350,6 @@ export function WatchlistPage() {
   );
 }
 
-function formatAssetType(value: SymbolQuote["assetType"]) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function EmptyState({ description, title }: { description: string; title: string }) {
   return (
     <div className="empty-state">
@@ -360,7 +359,37 @@ function EmptyState({ description, title }: { description: string; title: string
   );
 }
 
-function formatErrorMessage(error: unknown) {
+function formatGroupName(group: string, copy: AppCopy) {
+  return group === "All" ? copy.common.all : group;
+}
+
+function formatGroupTitle(group: string, copy: AppCopy) {
+  return group === "All" && copy.common.all === "全部" ? `${copy.common.all}${copy.common.symbols}` : `${formatGroupName(group, copy)} ${copy.common.symbols}`;
+}
+
+function formatSelectionSummary(visibleCount: number, selectedCount: number, copy: AppCopy, locale: Locale) {
+  return locale === "zh"
+    ? `${copy.watchlist.shown} ${visibleCount} 个 · ${copy.watchlist.selected} ${selectedCount} 个`
+    : `${visibleCount} ${copy.watchlist.shown} · ${selectedCount} ${copy.watchlist.selected}`;
+}
+
+function formatQueuedPriceMessage(count: number, copy: AppCopy, locale: Locale) {
+  if (locale === "zh") {
+    return `${copy.watchlist.queuedPricePrefix}${count} 个已选 ticker。`;
+  }
+
+  return `${copy.watchlist.queuedPricePrefix} ${count} selected ticker${count === 1 ? "" : "s"}.`;
+}
+
+function formatExportedMessage(count: number, copy: AppCopy, locale: Locale) {
+  if (locale === "zh") {
+    return `${copy.watchlist.exportedPrefix} ${count} 个标的。`;
+  }
+
+  return `${copy.watchlist.exportedPrefix} ${count} symbol${count === 1 ? "" : "s"}.`;
+}
+
+function formatErrorMessage(error: unknown, copy: AppCopy) {
   if (isApiError(error)) {
     return error.status === 0 ? error.message : `${error.message} (${error.status})`;
   }
@@ -369,5 +398,5 @@ function formatErrorMessage(error: unknown) {
     return error.message;
   }
 
-  return "The request could not be completed.";
+  return copy.common.unknownRequestError;
 }
